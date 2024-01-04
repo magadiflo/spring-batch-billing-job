@@ -1,0 +1,13 @@
+services:
+  postgres:
+    container_name: postgres
+    image: postgres:15.2-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: db_spring_batch
+      POSTGRES_USER: magadiflo
+      POSTGRES_PASSWORD: magadiflo
+    ports:
+      - 5433:5432
+    expose:
+      - 5433

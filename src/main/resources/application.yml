@@ -1,1 +1,11 @@
+server:
+  port: 8080
 
+spring:
+  application:
+    name: spring-batch-billing-job
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/db_spring_batch
+    username: magadiflo
+    password: magadiflo
