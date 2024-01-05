@@ -713,3 +713,129 @@ public class BillingJob implements Job {
     }
 }
 ````
+
+## Testeando el Job
+
+Ahora que la implementación de nuestro `job` está completa, podemos escribir una prueba para él. Spring Batch
+proporciona varias utilidades de prueba para simplificar la comprobación de los componentes Batch. Las veremos más
+adelante en el curso.
+
+En esta lección veremos cómo probar un `job` Spring Batch utilizando `JUnit 5` y las utilidades de prueba proporcionadas
+por Spring Boot.
+
+1. **Actualiza el `SpringBatchBillingJobApplicationTests`.**
+   En la clase de test que nos crea automáticamente Spring Boot, agregamos el código para probar el job:
+
+   ````java
+   @SpringBootTest
+   @ExtendWith(OutputCaptureExtension.class)
+   class SpringBatchBillingJobApplicationTests {
+   
+       @Autowired
+       private Job job;
+   
+       @Autowired
+       private JobLauncher jobLauncher;
+   
+       @Test
+       void testJobExecution(CapturedOutput output) throws Exception {
+           // given
+           JobParameters jobParameters = new JobParameters();
+   
+           // when
+           JobExecution jobExecution = this.jobLauncher.run(this.job, jobParameters);
+   
+           // then
+           Assertions.assertTrue(output.getOut().contains("Procesando información de facturación (billing)"));
+           Assertions.assertEquals(ExitStatus.COMPLETED, jobExecution.getExitStatus());
+       }
+   }
+   ````
+
+2. **Entendiendo la estructura de la clase de test**
+    - En primer lugar, anotamos la clase de prueba con `@SpringBootTest`. Al hacerlo, se habilitan las funciones de
+      prueba de Spring Boot, que comprenden la carga del contexto de aplicación de Spring, la preparación del contexto
+      de prueba, etc.
+      ````java
+      @SpringBootTest
+      @ExtendWith(OutputCaptureExtension.class)
+      class SpringBatchBillingJobApplicationTests {
+        /*...*/
+      }
+      ````
+    - A continuación, y con el fin de probar nuestro `job` por lotes que escribe la salida en la consola, utilizamos
+      la `OutputCaptureExtension` que proporciona Spring Boot para **capturar cualquier salida que se escriba en la
+      salida estándar y en la salida de error.**<br>   
+      En nuestro caso, necesitamos esta captura de salida para comprobar si el `job` está imprimiendo correctamente el
+      mensaje de información de facturación del proceso en la consola.
+      ````java
+      @SpringBootTest
+      @ExtendWith(OutputCaptureExtension.class)
+      class SpringBatchBillingJobApplicationTests {
+        /*...*/
+      }
+      ````
+    - Podemos entonces autocablear el `job` bajo prueba así como `JobLauncher` desde el contexto de prueba.
+      ````java
+      @SpringBootTest
+      @ExtendWith(OutputCaptureExtension.class)
+      class SpringBatchBillingJobApplicationTests {
+         @Autowired
+         private Job job;
+
+         @Autowired
+         private JobLauncher jobLauncher;
+         /* other codes */
+      }
+      ````
+
+3. **Entendiendo el caso de prueba**
+
+   Ahora que la clase de prueba está configurada, podemos escribir el método de prueba `testJobExecution`, que está
+   diseñado para:
+    - Iniciar el `Job` por lotes con un conjunto de parámetros.
+    - Comprobar que la salida del `Job` contiene el mensaje esperado y que su estado se ha actualizado correctamente.
+      ````java
+   
+      @SpringBootTest
+      @ExtendWith(OutputCaptureExtension.class)
+      class SpringBatchBillingJobApplicationTests {
+   
+         /*...*/
+   
+         @Test
+         void testJobExecution(CapturedOutput output) throws Exception {
+            // given
+            JobParameters jobParameters = new JobParameters();
+   
+            // when
+            JobExecution jobExecution = this.jobLauncher.run(this.job, jobParameters);
+   
+            // then
+            Assertions.assertTrue(output.getOut().contains("Procesando información de facturación (billing)"));
+            Assertions.assertEquals(ExitStatus.COMPLETED, jobExecution.getExitStatus());
+         }
+      }
+      ````
+
+Eso es todo lo que necesitamos para probar nuestro `Job` de facturación.
+
+4. **Ejecutando el test**
+
+   La prueba debe pasar, lo que significa que nuestro `job` por lotes está haciendo lo que se supone que debe hacer.
+
+   ![run test](./assets/06.runt-test.png)
+
+## Resumen
+
+¡Enhorabuena! Ha creado con éxito su primer `job` Spring Batch con una aplicación basada en Spring Boot.
+
+En este Laboratorio, el contenido ha sido cuidadosamente diseñado para que **implementes la interfaz Job directamente
+con fines de aprendizaje.**
+
+**Casi nunca tendrá que implementar esa interfaz directamente**, ya que Spring Batch proporciona implementaciones listas
+para usar como `SimpleJob` para `jobs` secuenciales simples basados en `steps` y `FlowJob` para trabajos que requieren
+un complejo flujo de ejecución por pasos.
+
+En el siguiente módulo, utilizarás estas clases y aprenderás a estructurar el flujo de trabajo de tu `job` por lotes
+con `steps`.
