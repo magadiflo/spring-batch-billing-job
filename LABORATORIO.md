@@ -109,18 +109,65 @@ CONTAINER ID   IMAGE                  COMMAND                  CREATED         S
 a681802663c0   postgres:15.2-alpine   "docker-entrypoint.s…"   3 minutes ago   Up 3 minutes   5433/tcp, 0.0.0.0:5433->5432/tcp   postgres
 ````
 
-Utilizando `DBeaver` nos conectamos a la base de datos de postgres que está dentro del contenedor y ejecutamos el
-siguiente script:
+Podemos utilizar `DBeaver` para conectarnos a la base de datos de postgres dentro del contenedor y ejecutar directamente
+el script que contiene las tablas y secuencias para definir nuestra base de datos, pero, en mi caso crearé
+un `Script de Shell` donde definiré los comandos a utilizar para poder eliminar y crear las tablas desde cero. Para eso,
+en la raíz del proyecto crearé un directorio llamado `/scripts` donde agregaré el archivo
+llamado `drop-create-tables-database.sh` y definiré los siguientes comandos:
+
+````bash
+docker cp ./src/sql/schema-drop-tables.sql postgres:/tmp/
+docker cp ./src/sql/schema-create-tables.sql postgres:/tmp/
+
+docker exec postgres psql -f ./tmp/schema-drop-tables.sql -U magadiflo -d db_spring_batch
+docker exec postgres psql -f ./tmp/schema-create-tables.sql -U magadiflo -d db_spring_batch
+````
+
+**DONDE**
+
+- `docker cp`, comando de docker que permite copiar archivos desde la pc local hacia dentro del contenedor y viceversa.
+- `./src/sql/schema-drop-tables.sql`, archivo que estará en dicha ruta de mi pc local para ser copiada.
+- `postgres:/tmp/`, `postgres` es el nombre del contenedor y `/tmp/` el directorio de destino dentro del contenedor
+  donde copiaremos el archivo.
+
+- `docker exec postgres`, accedemos dentro del contenedor `postgres`.
+- `psql`, nos permite utilizar la línea de comandos de postgres dentro del contenedor.
+- `-f ./tmp/schema-drop-tables.sql`, utilizará el archivo ubicado en dicho path. Recordemos que dicho archivo lo
+  copiamos al inicio.
+- `-U magadiflo`, definimos el usuario de la base de datos que es `magadiflo`.
+- `-d db_spring_batch`, definimos la base de datos que usaremos.
+
+Ahora, observamos que en los comandos anteriores estamos usando unos archivos que hasta el momento no hemos definido:
+`schema-drop-tables.sql` y `schema-create-tables.sql`, así que para que esto funcione debemos crear dichos archivos
+en el directorio `/src/sql/`:
+
+`schema-drop-tables.sql`
 
 ````sql
-CREATE TABLE BATCH_JOB_INSTANCE  (
+DROP TABLE IF EXISTS BATCH_STEP_EXECUTION_CONTEXT;
+DROP TABLE IF EXISTS BATCH_JOB_EXECUTION_CONTEXT;
+DROP TABLE IF EXISTS BATCH_STEP_EXECUTION;
+DROP TABLE IF EXISTS BATCH_JOB_EXECUTION_PARAMS;
+DROP TABLE IF EXISTS BATCH_JOB_EXECUTION;
+DROP TABLE IF EXISTS BATCH_JOB_INSTANCE;
+
+DROP SEQUENCE IF EXISTS BATCH_STEP_EXECUTION_SEQ;
+DROP SEQUENCE IF EXISTS BATCH_JOB_EXECUTION_SEQ;
+DROP SEQUENCE IF EXISTS BATCH_JOB_SEQ;
+````
+
+`schema-create-tables.sql`
+
+````sql
+CREATE TABLE BATCH_JOB_INSTANCE (
     JOB_INSTANCE_ID BIGINT  NOT NULL PRIMARY KEY ,
     VERSION BIGINT ,
     JOB_NAME VARCHAR(100) NOT NULL,
     JOB_KEY VARCHAR(32) NOT NULL,
     constraint JOB_INST_UN unique (JOB_NAME, JOB_KEY)
-) ;
-CREATE TABLE BATCH_JOB_EXECUTION  (
+);
+
+CREATE TABLE BATCH_JOB_EXECUTION (
     JOB_EXECUTION_ID BIGINT  NOT NULL PRIMARY KEY ,
     VERSION BIGINT  ,
     JOB_INSTANCE_ID BIGINT NOT NULL,
@@ -132,18 +179,20 @@ CREATE TABLE BATCH_JOB_EXECUTION  (
     EXIT_MESSAGE VARCHAR(2500) ,
     LAST_UPDATED TIMESTAMP,
     constraint JOB_INST_EXEC_FK foreign key (JOB_INSTANCE_ID)
-    references BATCH_JOB_INSTANCE(JOB_INSTANCE_ID)
-) ;
-CREATE TABLE BATCH_JOB_EXECUTION_PARAMS  (
+      references BATCH_JOB_INSTANCE(JOB_INSTANCE_ID)
+);
+
+CREATE TABLE BATCH_JOB_EXECUTION_PARAMS (
     JOB_EXECUTION_ID BIGINT NOT NULL ,
     PARAMETER_NAME VARCHAR(100) NOT NULL ,
     PARAMETER_TYPE VARCHAR(100) NOT NULL ,
     PARAMETER_VALUE VARCHAR(2500) ,
     IDENTIFYING CHAR(1) NOT NULL ,
     constraint JOB_EXEC_PARAMS_FK foreign key (JOB_EXECUTION_ID)
-    references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
-) ;
-CREATE TABLE BATCH_STEP_EXECUTION  (
+     references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+);
+
+CREATE TABLE BATCH_STEP_EXECUTION (
     STEP_EXECUTION_ID BIGINT  NOT NULL PRIMARY KEY ,
     VERSION BIGINT NOT NULL,
     STEP_NAME VARCHAR(100) NOT NULL,
@@ -164,26 +213,109 @@ CREATE TABLE BATCH_STEP_EXECUTION  (
     EXIT_MESSAGE VARCHAR(2500) ,
     LAST_UPDATED TIMESTAMP,
     constraint JOB_EXEC_STEP_FK foreign key (JOB_EXECUTION_ID)
-    references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
-) ;
-CREATE TABLE BATCH_STEP_EXECUTION_CONTEXT  (
+       references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+);
+
+CREATE TABLE BATCH_STEP_EXECUTION_CONTEXT (
     STEP_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,
     SHORT_CONTEXT VARCHAR(2500) NOT NULL,
     SERIALIZED_CONTEXT TEXT ,
     constraint STEP_EXEC_CTX_FK foreign key (STEP_EXECUTION_ID)
-    references BATCH_STEP_EXECUTION(STEP_EXECUTION_ID)
-) ;
-CREATE TABLE BATCH_JOB_EXECUTION_CONTEXT  (
+       references BATCH_STEP_EXECUTION(STEP_EXECUTION_ID)
+);
+
+CREATE TABLE BATCH_JOB_EXECUTION_CONTEXT (
     JOB_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,
     SHORT_CONTEXT VARCHAR(2500) NOT NULL,
     SERIALIZED_CONTEXT TEXT ,
     constraint JOB_EXEC_CTX_FK foreign key (JOB_EXECUTION_ID)
-    references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
-) ;
+      references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+);
+
 CREATE SEQUENCE BATCH_STEP_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
 CREATE SEQUENCE BATCH_JOB_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
 CREATE SEQUENCE BATCH_JOB_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
 ````
+
+Una vez que tenemos creado el archivo `Script de Shell` y los `Scripts SQL` y además tenemos corriendo el contenedor
+de postgres, utilizamos el `GitBash` para ejecutar el archivo `drop-create-tables-database.sh`, así que nos posicionamos
+en la raíz del proyecto y ejecutamos:
+
+````bash
+# Utilizando GitBash
+USUARIO@DESKTOP-EGDL8Q6 MINGW64 /m/PROGRAMACION/DESARROLLO_JAVA_SPRING/11.spring_academy/spring-batch-billing-job (feature/create-run-test-job)
+
+$ ./scripts/drop-create-tables-database.sh
+psql:tmp/schema-drop-tables.sql:1: NOTICE:  table "batch_step_execution_context" does not exist, skipping
+DROP TABLE
+DROP TABLE
+psql:tmp/schema-drop-tables.sql:2: NOTICE:  table "batch_job_execution_context" does not exist, skipping
+psql:tmp/schema-drop-tables.sql:3: NOTICE:  table "batch_step_execution" does not exist, skipping
+DROP TABLE
+psql:tmp/schema-drop-tables.sql:4: NOTICE:  table "batch_job_execution_params" does not exist, skipping
+DROP TABLE
+psql:tmp/schema-drop-tables.sql:5: NOTICE:  table "batch_job_execution" does not exist, skipping
+DROP TABLE
+DROP TABLE
+psql:tmp/schema-drop-tables.sql:6: NOTICE:  table "batch_job_instance" does not exist, skipping
+psql:tmp/schema-drop-tables.sql:8: NOTICE:  sequence "batch_step_execution_seq" does not exist, skipping
+DROP SEQUENCE
+psql:tmp/schema-drop-tables.sql:9: NOTICE:  sequence "batch_job_execution_seq" does not exist, skipping
+DROP SEQUENCE
+psql:tmp/schema-drop-tables.sql:10: NOTICE:  sequence "batch_job_seq" does not exist, skipping
+DROP SEQUENCE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE SEQUENCE
+CREATE SEQUENCE
+CREATE SEQUENCE
+````
+
+La primera vez nos saldrá el mensaje `NOTICE:  table "batch_job_execution_context" does not exist, skipping` para cada
+una de las tablas creadas, esto es porque la base de datos dentro del contenedor está vacía.
+
+Listo, ahora utilizando nuestra línea de comandos de `Cmder` ingresamos dentro del contenedor para ver que tenemos
+los archivos copiados en el directorio `/tmp`:
+
+````bash
+docker exec -it postgres /bin/sh
+/ # cd tmp/
+/tmp # ls
+schema-create-tables.sql  schema-drop-tables.sql
+/tmp #
+````
+
+Ahora, verificamos las tablas creadas utilizando la línea de comando de postgres:
+
+````bash
+/tmp # psql -U magadiflo -d db_spring_batch
+psql (15.2)
+Type "help" for help.
+
+db_spring_batch=# \d
+                      List of relations
+ Schema |             Name             |   Type   |   Owner
+--------+------------------------------+----------+-----------
+ public | batch_job_execution          | table    | magadiflo
+ public | batch_job_execution_context  | table    | magadiflo
+ public | batch_job_execution_params   | table    | magadiflo
+ public | batch_job_execution_seq      | sequence | magadiflo
+ public | batch_job_instance           | table    | magadiflo
+ public | batch_job_seq                | sequence | magadiflo
+ public | batch_step_execution         | table    | magadiflo
+ public | batch_step_execution_context | table    | magadiflo
+ public | batch_step_execution_seq     | sequence | magadiflo
+(9 rows)
+````
+
+Vemos que efectivamente, las tablas y secuencias fueron creadas correctamente. Ahora, cada vez que quiera eliminar las
+tablas y secuencias y volverlas a crear dentro del contenedor, simplemente tendría que ejecutar el archivo
+`drop-create-tables-database.sh` utilizando el `Git Bash` de `Git`. ¿Por qué? Porque nos proporciona la línea de
+comandos donde podemos ejecutar comandos línux o archivos con extensión `.sh` que es para `linux`.
 
 ### 2. Configurando las propiedades de la base de datos en Spring Boot
 
@@ -431,25 +563,21 @@ facturación de procesamiento en la salida estándar, tal y como se esperaba.
    Ahora vamos a intentar volver a ejecutar el `Job` y comprobar su estado en la base de datos.
 
    Pero antes de volver a ejecutar el `Job`, vamos a limpiar la base de datos para eliminar el ruido de la ejecución
-   anterior. En la pestaña Terminal, ejecute los siguientes comandos:
+   anterior. En la pestaña Terminal de `Git Bash`, ejecute el archivo `drop-create-tables-database.sh`:
 
    ````bash
-   $ docker compose down
-   $ docker compose up -d
-   ````
-
-   Luego podemos ingresar a la base de datos dentro del contenedor y usar la línea de comandos de psql de postgres para
-   poder ejecutar el script con las tablas y secuencias de la base de datos:
-
-   ````bash
-   $ docker exec -it postgres /bin/sh
-   / # psql -U magadiflo -d db_spring_batch
-   psql (15.2)
-   Type "help" for help.
+   USUARIO@DESKTOP-EGDL8Q6 MINGW64 /m/PROGRAMACION/DESARROLLO_JAVA_SPRING/11.spring_academy/spring-batch-billing-job (feature/create-run-test-job)
    
-   db_spring_batch=# CREATE TABLE BATCH_JOB_INSTANCE  (     JOB_INSTANCE_ID BIGINT  NOT NULL PRIMARY KEY ,     VERSION BIGINT ,     JOB_NAME VARCHAR(100) NOT NULL,     JOB_KEY VARCHAR(32) NOT NULL,     constraint JOB_INST_UN unique (JOB_NAME, JOB_KEY) ) ; CREATE TABLE BATCH_JOB_EXECUTION  (     JOB_EXECUTION_ID BIGINT  NOT NULL PRIMARY KEY ,     VERSION BIGINT  ,     JOB_INSTANCE_ID BIGINT NOT NULL,     CREATE_TIME TIMESTAMP NOT NULL,     START_TIME TIMESTAMP DEFAULT NULL ,
-       END_TIME TIMESTAMP DEFAULT NULL ,     STATUS VARCHAR(10) ,     EXIT_CODE VARCHAR(2500) ,     EXIT_MESSAGE VARCHAR(2500) ,     LAST_UPDATED TIMESTAMP,     constraint JOB_INST_EXEC_FK foreign key (JOB_INSTANCE_ID)     references BATCH_JOB_INSTANCE(JOB_INSTANCE_ID) ) ; CREATE TABLE BATCH_JOB_EXECUTION_PARAMS  (     JOB_EXECUTION_ID BIGINT NOT NULL ,     PARAMETER_NAME VARCHAR(100) NOT NULL ,     PARAMETER_TYPE VARCHAR(100) NOT NULL ,     PARAMETER_VALUE VARCHAR(2500) ,
-      IDENTIFYING CHAR(1) NOT NULL ,     constraint JOB_EXEC_PARAMS_FK foreign key (JOB_EXECUTION_ID)     references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID) ) ; CREATE TABLE BATCH_STEP_EXECUTION  (     STEP_EXECUTION_ID BIGINT  NOT NULL PRIMARY KEY ,     VERSION BIGINT NOT NULL,     STEP_NAME VARCHAR(100) NOT NULL,     JOB_EXECUTION_ID BIGINT NOT NULL,     CREATE_TIME TIMESTAMP NOT NULL,     START_TIME TIMESTAMP DEFAULT NULL ,     END_TIME TIMESTAMP DEFAULT NULL ,     STATUS VARCHAR(10) ,     COMMIT_COUNT BIGINT ,     READ_COUNT BIGINT ,     FILTER_COUNT BIGINT ,     WRITE_COUNT BIGINT ,     READ_SKIP_COUNT BIGINT ,     WRITE_SKIP_COUNT BIGINT ,     PROCESS_SKIP_COUNT BIGINT ,     ROLLBACK_COUNT BIGINT ,     EXIT_CODE VARCHAR(2500) ,     EXIT_MESSAGE VARCHAR(2500) ,     LAST_UPDATED TIMESTAMP,     constraint JOB_EXEC_STEP_FK foreign key (JOB_EXECUTION_ID)     references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID) ) ; CREATE TABLE BATCH_STEP_EXECUTION_CONTEXT  (     STEP_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,     SHORT_CONTEXT VARCHAR(2500) NOT NULL,     SERIALIZED_CONTEXT TEXT ,     constraint STEP_EXEC_CTX_FK foreign key (STEP_EXECUTION_ID)     references BATCH_STEP_EXECUTION(STEP_EXECUTION_ID) ) ; CREATE TABLE BATCH_JOB_EXECUTION_CONTEXT  (     JOB_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,     SHORT_CONTEXT VARCHAR(2500) NOT NULL,     SERIALIZED_CONTEXT TEXT ,     constraint JOB_EXEC_CTX_FK foreign key (JOB_EXECUTION_ID)     references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID) ) ; CREATE SEQUENCE BATCH_STEP_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE; CREATE SEQUENCE BATCH_JOB_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE; CREATE SEQUENCE BATCH_JOB_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
+   $ ./scripts/drop-create-tables-database.sh
+   DROP TABLE
+   DROP TABLE
+   DROP TABLE
+   DROP TABLE
+   DROP TABLE
+   DROP TABLE
+   DROP SEQUENCE
+   DROP SEQUENCE
+   DROP SEQUENCE
    CREATE TABLE
    CREATE TABLE
    CREATE TABLE
@@ -459,20 +587,6 @@ facturación de procesamiento en la salida estándar, tal y como se esperaba.
    CREATE SEQUENCE
    CREATE SEQUENCE
    CREATE SEQUENCE
-   db_spring_batch=# \d
-                         List of relations
-    Schema |             Name             |   Type   |   Owner
-   --------+------------------------------+----------+-----------
-    public | batch_job_execution          | table    | magadiflo
-    public | batch_job_execution_context  | table    | magadiflo
-    public | batch_job_execution_params   | table    | magadiflo
-    public | batch_job_execution_seq      | sequence | magadiflo
-    public | batch_job_instance           | table    | magadiflo
-    public | batch_job_seq                | sequence | magadiflo
-    public | batch_step_execution         | table    | magadiflo
-    public | batch_step_execution_context | table    | magadiflo
-    public | batch_step_execution_seq     | sequence | magadiflo
-   (9 rows)
    ````
 
    Ahora vuelva a ejecutar el `Job` como se ha mostrado antes **(ejecutar la aplicación)** y compruebe la base de datos.
@@ -486,5 +600,5 @@ facturación de procesamiento en la salida estándar, tal y como se esperaba.
    (1 row)
    ````
 
-Si el estado del Trabajo es `COMPLETED`, ¡enhorabuena! Ha creado, configurado y ejecutado correctamente su primer
+Si el estado del `Job` es `COMPLETED`, ¡enhorabuena! Ha creado, configurado y ejecutado correctamente su primer
 `job` por lotes de Spring.
