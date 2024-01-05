@@ -602,3 +602,114 @@ facturación de procesamiento en la salida estándar, tal y como se esperaba.
 
 Si el estado del `Job` es `COMPLETED`, ¡enhorabuena! Ha creado, configurado y ejecutado correctamente su primer
 `job` por lotes de Spring.
+
+### Manejo de errores
+
+Al igual que con la ruta de éxito, es responsabilidad del `Job` manejar las excepciones en tiempo de ejecución y
+reportar su fallo al `JobRepository`.
+
+Como ejercicio adicional, intente simular una excepción en el método `execute` y reporte un estado de `FAILED` al
+repositorio.
+
+Observe como no se espera que el método `execute` lance excepciones, y es responsabilidad de la implementación del
+`Job` manejarlas y añadirlas al objeto `JobExecution` para su posterior inspección:
+
+````java
+public class BillingJob implements Job {
+
+    /* other codes */
+
+    @Override
+    public void execute(JobExecution execution) {
+        try {
+            throw new Exception("No se puede procesar la información de facturación");
+        } catch (Exception exception) {
+            execution.addFailureException(exception);
+            execution.setStatus(BatchStatus.COMPLETED);
+            execution.setExitStatus(ExitStatus.FAILED.addExitDescription(exception.getMessage()));
+        } finally {
+            this.jobRepository.update(execution);
+        }
+    }
+}
+````
+
+A continuación realicemos las siguientes acciones:
+
+1. Limpiamos la base de datos del contenedor de postgres ejecutando mediante el `GitBash` el `Script de Shell` que
+   creamos al inicio:
+
+   ````bash
+   USUARIO@DESKTOP-EGDL8Q6 MINGW64 /m/PROGRAMACION/DESARROLLO_JAVA_SPRING/11.spring_academy/spring-batch-billing-job (feature/create-run-test-job)
+   $ ./scripts/drop-create-tables-database.sh
+   DROP TABLE
+   DROP TABLE
+   DROP TABLE
+   DROP TABLE
+   DROP TABLE
+   DROP TABLE
+   DROP SEQUENCE
+   DROP SEQUENCE
+   DROP SEQUENCE
+   CREATE TABLE
+   CREATE TABLE
+   CREATE TABLE
+   CREATE TABLE
+   CREATE TABLE
+   CREATE TABLE
+   CREATE SEQUENCE
+   CREATE SEQUENCE
+   CREATE SEQUENCE
+   ````
+
+2. Volvemos a ejecutar el `Job` con la lógica de negocio intencionadamente fallida. Además del estado `COMPLETED`,
+   también debería aparecer un `exit_code` de estado `FAILED` en la base de datos, así como el mensaje de error en la
+   columna `exist_message`:
+
+````bash
+$ docker exec -it postgres /bin/sh
+/ # psql -U magadiflo -d db_spring_batch
+psql (15.2)
+Type "help" for help.
+
+db_spring_batch=# \d
+                      List of relations
+ Schema |             Name             |   Type   |   Owner
+--------+------------------------------+----------+-----------
+ public | batch_job_execution          | table    | magadiflo
+ public | batch_job_execution_context  | table    | magadiflo
+ public | batch_job_execution_params   | table    | magadiflo
+ public | batch_job_execution_seq      | sequence | magadiflo
+ public | batch_job_instance           | table    | magadiflo
+ public | batch_job_seq                | sequence | magadiflo
+ public | batch_step_execution         | table    | magadiflo
+ public | batch_step_execution_context | table    | magadiflo
+ public | batch_step_execution_seq     | sequence | magadiflo
+(9 rows)
+
+db_spring_batch=# SELECT * FROM batch_job_execution;
+ job_execution_id | version | job_instance_id |        create_time         | start_time | end_time |  status   | exit_code |                    exit_message                    |        last_updated
+------------------+---------+-----------------+----------------------------+------------+----------+-----------+-----------+----------------------------------------------------+----------------------------
+                1 |       1 |               1 | 2024-01-05 17:14:23.748417 |            |          | COMPLETED | FAILED    | No se puede procesar la información de facturación | 2024-01-05 17:14:23.789257
+(1 row)
+````
+
+Una vez que hemos comprobado este manejo de errores, vamos a asegurarnos de revertir el método `execute` a la
+implementación correcta, para dejarlo como lo teníamos inicialmente.
+
+````java
+public class BillingJob implements Job {
+
+    /* Other codes */
+
+    @Override
+    public void execute(JobExecution execution) {
+        System.out.println("Procesando información de facturación (billing)");
+
+        execution.setStatus(BatchStatus.COMPLETED);
+        execution.setExitStatus(ExitStatus.COMPLETED);
+
+        this.jobRepository.update(execution);
+    }
+}
+````
