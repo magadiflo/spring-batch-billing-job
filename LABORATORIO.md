@@ -1,3 +1,7 @@
+# LABORATORIO
+
+---
+
 ## ¿Qué vamos a construir?
 
 Creará una aplicación por lotes que genera informes de facturación para una empresa de telefonía móvil imaginaria
