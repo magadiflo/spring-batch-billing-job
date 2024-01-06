@@ -270,3 +270,60 @@ Para nuestro curso, el `BillingJob` de Spring Cellular consume un archivo plano 
 para ser pasado como un JobParameter a nuestro Job.
 
 Esto es lo que veremos en el próximo laboratorio de esta lección.
+
+## ¿Cómo se relacionan los Job Instance con los Job Execution?
+
+**Un `JobExecution` se refiere al concepto técnico de un único intento de ejecutar un** `JobInstance`. Como se ha visto
+en la lección anterior, un `JobExecution` puede terminar con éxito o con fracaso. En el caso del `Job` **EndOfDay**, si
+la ejecución del 1 de Enero falla la primera vez y se ejecuta de nuevo al día siguiente, sigue siendo la ejecución del 1
+de Enero. Por lo tanto, cada `JobInstance` puede tener múltiples `JobExecutions`.
+
+La relación entre los conceptos de `Job, JobInstance, JobParameters y JobExecution` se resume en el siguiente diagrama:
+
+![job class relations](./assets/08.job-class-relations.svg)
+
+He aquí un ejemplo concreto del ciclo de vida de un `JobInstance` en el caso del `Job EndOfDay`:
+
+![lifecycle example](./assets/09.lifecycle-example.svg)
+
+En este ejemplo, el primer intento de ejecución del `Job Instance 1` falla, por lo que se ejecuta otra ejecución
+y tiene éxito. Esto da lugar a dos `JobExecutions` para la misma `JobInstance`. Para el `Job Instance 2`, sin
+embargo, el primer intento de ejecución tiene éxito, por lo que no hay necesidad de lanzar una segunda ejecución.
+
+**En Spring Batch, un `JobInstance` no se considera completo a menos que un `JobExecution` finalice con éxito.** Un
+`JobInstance` que está completo no puede reiniciarse de nuevo. Se trata de una elección de diseño para evitar el
+reprocesamiento accidental de los mismos datos para los `jobs` por lotes que no son idempotentes.
+
+## Los distintos tipos de Job Parameters
+
+Los `JobParameters` se utilizan normalmente para distinguir un `JobInstance` de otro. En otras palabras, se utilizan
+para identificar un `JobInstance` específico.
+
+No todos los parámetros pueden utilizarse para identificar `job instance`. Por ejemplo, si el `Job EndOfDay`
+toma otro parámetro - digamos, **file.format**) - que representa el formato del archivo de salida (CSV, XML, y otros),
+este parámetro no representa realmente los datos a procesar, por lo que, podría ser excluido del proceso de
+identificación de los `Job Instances`.
+
+Aquí es donde entran en juego los `JobParameters` **no identificadores**. En Spring Batch, los `JobParameters` pueden
+ser identificadores o no identificadores. Un `JobParameter` identificativo contribuye a la identificación
+de `JobInstance`, mientras que uno no identificativo no. Por defecto, los `JobParameters` son identificadores, y Spring
+Batch proporciona API para especificar si un `JobParameter` es identificador o no.
+
+En el ejemplo del `Job EndOfDay`, los parámetros se pueden definir en la siguiente tabla:
+
+| Job parameters | Identifying? | Example    
+|----------------|--------------|------------
+| schedule.date  | yes          | 2023-01-01 
+| file.format    | no           | csv        
+
+Ahora la pregunta es: **¿Por qué es importante y cómo se utiliza en Spring Batch?** La identificación de `JobParameters`
+juega un papel crucial en caso de fallo. En un entorno de producción, donde cientos de instancias de Job se están
+ejecutando, y una de ellas falla, necesitamos una manera de identificar qué instancia ha fallado. Aquí es donde la
+identificación de los parámetros del `Job` es clave. Cuando un `JobExecution` para un `JobInstance` dado falla, lanzar
+el mismo job con el mismo conjunto de `JobParameters` de identificación creará un nuevo `JobExecution` (es decir, un
+nuevo intento) para el mismo JobInstance.
+
+En esta lección, ha aprendido qué son las JobInstances y cómo identificarlas con JobParameters. En el Laboratorio de
+esta lección, aprenderá a utilizar las API proporcionadas por Spring Batch para manipular JobParameters, y cómo iniciar
+el mismo o diferentes JobInstances.
+
