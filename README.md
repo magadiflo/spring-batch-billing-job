@@ -211,3 +211,62 @@ Los trabajos por lotes se lanzan normalmente de dos maneras:
 
 **En este curso, sólo cubriremos el lanzamiento de `Jobs` desde la línea de comandos.** Por favor, consulte los
 enlaces de recursos adicionales para más detalles sobre cómo lanzar trabajos desde dentro de un contenedor web.
+
+---
+
+## Entendiendo las instancias de Job
+
+En la lección anterior, aprendiste sobre `Jobs` y `JobExecutions`. En esta lección, exploraremos otro concepto clave del
+modelo de dominio Batch, que es `JobInstance`. Explicaremos qué son las `JobInstances` y cómo se relacionan con
+los `Jobs` y las `JobExecutions`.
+
+## ¿Qué son los Job Instances?
+
+Un `job` puede definirse una vez, pero es probable que se ejecute muchas veces, normalmente según un calendario
+establecido. En Spring Batch, un `job` es la definición genérica de un proceso por lotes especificado por un
+desarrollador. Esta definición genérica debe parametrizarse para crear instancias reales de un `job`, denominadas
+`JobInstances`.
+
+**Un `JobInstance` es una parametrización única de una definición de Job.** Por ejemplo, imagine un proceso por lotes
+que
+necesita ser ejecutado una vez al final de cada día, o cuando un determinado archivo está presente. En el escenario de
+una vez al día, podemos utilizar Spring Batch para crear un `Job` EndOfDay para ello. Habría una única definición de
+`Job` EndOfDay, pero múltiples instancias de ese mismo `Job`, una por día. Cada instancia procesaría los datos de un
+día en particular, y podría tener un resultado diferente (éxito o fracaso) de otras instancias. Por lo tanto, cada
+instancia individual del `Job` debe ser rastreada por separado.
+
+Un `JobInstance` se distingue de otros `JobInstances` por un parámetro específico, o un conjunto de parámetros. Por
+ejemplo, un parámetro llamado **schedule.date** especificaría un día concreto. Dicho parámetro se
+denomina `JobParameter`. Los `JobParameters` son los que distinguen un `JobInstance` de otra. El siguiente diagrama
+muestra cómo los `JobParameters` definen las `JobInstances`:
+
+![job parameters](./assets/07.job-parameters.svg)
+
+## ¿Qué representan los Job Instances y los Job Parameters?
+
+Los `JobInstances` se diferencian entre sí por distintos `JobParameters`. Estos parámetros suelen representar los datos
+que
+debe procesar un determinado `JobInstance`. Por ejemplo, en el caso del `Job` EndOfDay, el `Job parameter`
+**schedule.date** para el 1 de enero define la instancia de job que procesará los datos del 1 de enero.
+El `Job parameter` **schedule.date** para el 2 de enero define la instancia de job que procesará los datos del 2 de
+enero, y así sucesivamente.
+
+Aunque no es necesario que los `job parameters` representen los datos que se van a procesar, esta es una buena
+sugerencia - y una buena práctica - para diseñar correctamente los `JobInstances`. Diseñar `JobInstances` que
+representen los datos a procesar es más fácil de configurar, de probar y de pensar, en caso de fallo.
+
+La definición de un `JobInstance` en sí no tiene absolutamente ninguna relación con los datos que se van a cargar.
+Depende totalmente de la implementación del `Job` determinar cómo se cargan los datos, basándose en
+los `Job parameters`. A continuación se muestran algunos ejemplos de `JobParameters` y cómo representan los datos que
+debe procesar el `JobInstance` correspondiente:
+
+- **Una fecha específica:** En este caso, tendríamos una JobInstance por fecha.
+- **Un fichero concreto:** En este caso, tendríamos una JobInstance por fichero.
+- **Un rango específico de registros en una tabla de base de datos relacional:** En este caso, tendríamos una
+  JobInstance por rango.
+- Y más.
+
+Para nuestro curso, el `BillingJob` de Spring Cellular consume un archivo plano como entrada, que es un buen candidato
+para ser pasado como un JobParameter a nuestro Job.
+
+Esto es lo que veremos en el próximo laboratorio de esta lección.
