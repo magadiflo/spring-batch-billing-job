@@ -992,7 +992,58 @@ Como era de esperar, la primera ejecución recibió el parámetro `input.file` `
 
 ### 2. Reejecutando un Job instance
 
+Como hemos visto en el sencillo mensaje que imprimimos en la consola, el primer `JobInstance` correspondiente al
+procesamiento del fichero `billing-2023-01.csv` ha finalizado con éxito y el informe de facturación se ha generado
+correctamente.
 
+Ejecutar de nuevo el mismo `JobInstance` sería un desperdicio de recursos. Pero, **¿y si accidentalmente volvemos a
+ejecutar el mismo fichero?**
+
+¿Cómo podría ocurrir esto? A veces, volver a ejecutar el mismo job se debe a un error humano. Otras veces, un
+problema técnico o una limitación de la plataforma pueden provocar una reejecución. Sea cual sea la razón, **un
+`JobInstance` no debería tener consecuencias nefastas si se ejecuta más de una vez.** Nadie quiere que le facturen dos
+veces por el uso de su teléfono móvil.
+
+Intentémoslo y veamos qué pasa.
+
+En la pestaña inicial de terminal, ejecute el siguiente comando:
+
+````bash
+$ java -jar .\target\spring-batch-billing-job-0.0.1-SNAPSHOT.jar input.file=src/main/resources/billing-2023-01.csv
+````
+
+Debería ver un error como el siguiente:
+
+````bash
+Caused by: org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException: A job instance already exists and 
+is complete for identifying parameters={'input.file':'{value=src/main/resources/billing-2023-01.csv, type=class java.lang.String, identifying=true}'}.  
+If you want to run this job again, change the parameters.
+````
+
+Como puede ver, sin más configuración, **Spring Batch evitó que el mismo `JobInstance` se ejecutara por segunda vez.**
+Esta elección de diseño por defecto aborda los errores humanos y las limitaciones de la plataforma que hemos mencionado
+antes.
+
+Después de ese fallo al relanzar un `JobInstance` con éxito, el `BATCH_JOB_EXECUTION` no debería contener otra
+ejecución, lo que puede comprobar con el siguiente comando:
+
+````bash
+docker exec -it postgres /bin/sh
+/ # psql -U magadiflo -d db_spring_batch
+psql (15.2)
+Type "help" for help.
+
+db_spring_batch=# SELECT COUNT(*) FROM batch_job_execution;
+ count
+-------
+     1
+(1 row)
+
+db_spring_batch=#
+````
+
+Ahora que estamos protegidos contra la reejecución de un `JobInstance`, veamos qué sucede cuando ejecutamos un segundo
+`JobInstance` diferente.
 
 ### 3. Lanzando un segundo Job Instance
 
