@@ -839,3 +839,163 @@ un complejo flujo de ejecución por pasos.
 
 En el siguiente módulo, utilizarás estas clases y aprenderás a estructurar el flujo de trabajo de tu `job` por lotes
 con `steps`.
+
+---
+
+## Usando Job parameters para crear Job Instances
+
+### 1. Usando Job parameters
+
+En la lección anterior, analizamos los JobInstances y mostramos cómo se definen e identifican mediante JobParameters.
+En este Laboratorio, aprenderá cómo pasar parámetros a un Job para crear JobInstances.
+
+Se espera que nuestro Spring Cellular BillingJob procese datos de facturación mensual desde un archivo plano. El archivo
+de entrada se utilizará como un parámetro de identificación del Job llamado `input.file`. Por lo tanto, tendríamos un
+JobInstance distinto por mes.
+
+La carpeta `src/main/resources` contiene dos ficheros planos, `billing-2023-01.csv` y `billing-2023-02.csv` que
+contienen respectivamente los datos de facturación de Enero 2023 y Febrero 2023. Puede explorar los datos de esos
+archivos, pero el contenido no es relevante para este Laboratorio por el momento. Explicaremos el formato de estos
+archivos y qué datos representan en un futuro Laboratorio. Por ahora, todo lo que debes entender es que pasaremos estos
+archivos como parámetros a nuestro `BillingJob` para crear distintas `JobInstances`.
+
+- **Modificamos la implementación de `BillingJob` para obtener el archivo de entrada de `JobParameters`.** En esta
+  sección, obtenemos acceso a JobParameters desde la referencia JobExecution y extraemos el parámetro input.file. A
+  continuación, actualizamos el mensaje que imprimimos en la salida estándar para mostrar qué archivo está procesando la
+  ejecución actual.
+
+````java
+public class BillingJob implements Job {
+
+    /* other codes */
+
+    @Override
+    public void execute(JobExecution execution) {
+        JobParameters jobParameters = execution.getJobParameters();
+        String inputFile = jobParameters.getString("input.file");
+
+        System.out.println("Procesando información de facturación desde el archivo " + inputFile);
+
+        execution.setStatus(BatchStatus.COMPLETED);
+        execution.setExitStatus(ExitStatus.COMPLETED);
+
+        this.jobRepository.update(execution);
+    }
+}
+````
+
+- **Inicie el `BillingJob` y pase el archivo de entrada de datos de facturación como `JobParameter`.** Primero,
+  dejaremos limpia la base de datos, para eso ejecutamos nuestro script de shell:
+
+````bash
+USUARIO@DESKTOP-EGDL8Q6 MINGW64 /m/PROGRAMACION/DESARROLLO_JAVA_SPRING/11.spring_academy/spring-batch-billing-job (feature/create-run-test-job)
+$ ./scripts/drop-create-tables-database.sh
+DROP TABLE
+DROP TABLE
+DROP TABLE
+DROP TABLE
+DROP TABLE
+DROP TABLE
+DROP SEQUENCE
+DROP SEQUENCE
+DROP SEQUENCE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE SEQUENCE
+CREATE SEQUENCE
+CREATE SEQUENCE
+````
+
+Ahora sí, compilamos el proyecto usando el siguiente comando desde la raíz del proyecto en la terminal:
+
+````bash
+$ mvnw clean package -DskipTests
+````
+
+A continuación, inicie el Job y pase el fichero de entrada como parámetro con el siguiente comando:
+
+````bash
+$ java -jar .\target\spring-batch-billing-job-0.0.1-SNAPSHOT.jar input.file=src/main/resources/billing-2023-01.csv
+````
+
+Debería ver el siguiente mensaje en la consola:
+
+````bash
+...
+2024-01-08T17:19:11.384-05:00  INFO 18356 --- [spring-batch-billing-job] [           main] o.s.b.a.b.JobLauncherApplicationRunner   : Running default command line with: [input.file=src/main/resources/billing-2023-01.csv]
+2024-01-08T17:19:11.596-05:00  INFO 18356 --- [spring-batch-billing-job] [           main] o.s.b.c.l.support.SimpleJobLauncher      : Job: [dev.magadiflo.billingjob.app.jobs.BillingJob@53f4c1e6] launched with the following parameters: [{'input.file':'{value=src/main/resources/billing-2023-01.csv, type=class java.lang.String, identifying=true}'}]
+Procesando información de facturación desde el archivo src/main/resources/billing-2023-01.csv
+2024-01-08T17:19:11.633-05:00  INFO 18356 --- [spring-batch-billing-job] [           main] o.s.b.c.l.support.SimpleJobLauncher      : Job: [dev.magadiflo.billingjob.app.jobs.BillingJob@53f4c1e6] completed with the following parameters: [{'input.file':'{value=src/main/resources/billing-2023-01.csv, type=class java.lang.String, identifying=true}'}] and the following status: [COMPLETED]
+...
+````
+
+¡Perfecto! Esto significa que nuestro `Job` es ahora capaz de obtener el archivo de entrada desde `JobParameters` y
+procesar los datos como se esperaba. Ahora revisemos la base de datos para inspeccionar los detalles del
+primer `JobInstance`.
+
+- **Inspeccione los metadatos del lote en la base de datos.**
+
+````bash
+/ # psql -U magadiflo -d db_spring_batch
+psql (15.2)
+Type "help" for help.
+
+db_spring_batch=# SELECT * FROM batch_job_instance;
+ job_instance_id | version |  job_name  |             job_key
+-----------------+---------+------------+----------------------------------
+               1 |       0 | BillingJob | c0cb4257f9f2b2fa119bbebfb801772f
+(1 row)
+````
+
+Tenemos un primer `JobInstance` con `ID 1` para el `Job` llamado `BilingJob`. La columna version es una columna técnica
+utilizada por Spring Batch para el bloqueo optimista, y su uso está fuera del alcance de este Laboratorio. El `job_key`
+es un hash de los parámetros de identificación del job calculados por Spring Batch para identificar a
+los `JobInstances`.
+
+Ahora vamos a comprobar el `JobExecution` correspondiente para este primer `JobInstance`. Para ello, utilice el
+siguiente comando:
+
+````bash
+db_spring_batch=# SELECT * FROM batch_job_execution;
+ job_execution_id | version | job_instance_id |        create_time         | start_time | end_time |  status   | exit_code | exit_message |        last_updated
+------------------+---------+-----------------+----------------------------+------------+----------+-----------+-----------+--------------+----------------------------
+                1 |       1 |               1 | 2024-01-08 17:34:34.894126 |            |          | COMPLETED | COMPLETED |              | 2024-01-08 17:34:34.943337
+(1 row)
+
+db_spring_batch=#
+````
+
+Como vemos, tenemos una primera ejecución que corresponde a la primera instancia (a través del `job_instance_id`) que se
+completa con éxito (`status=COMPLETED`).
+
+Por último, vamos a comprobar el contenido del BATCH_JOB_EXECUTION_PARAMS con el siguiente comando:
+
+````bash
+db_spring_batch=# SELECT * FROM batch_job_execution_params;
+ job_execution_id | parameter_name |  parameter_type  |            parameter_value             | identifying
+------------------+----------------+------------------+----------------------------------------+-------------
+                1 | input.file     | java.lang.String | src/main/resources/billing-2023-01.csv | Y
+(1 row)
+
+db_spring_batch=#
+````
+
+Como era de esperar, la primera ejecución recibió el parámetro `input.file` `Job` con el valor
+`src/main/resources/billing-2023-01.csv`.
+
+**¡Todo esto funciona de maravilla! ¿Pero qué pasa si volvemos a ejecutar el mismo JobInstance aunque se complete con
+éxito? Intentémoslo y averigüémoslo en el siguiente apartado.**
+
+### 2. Reejecutando un Job instance
+
+
+
+### 3. Lanzando un segundo Job Instance
+
+### 4. Actualizando la prueba
+
+---
