@@ -1047,6 +1047,90 @@ Ahora que estamos protegidos contra la reejecución de un `JobInstance`, veamos 
 
 ### 3. Lanzando un segundo Job Instance
 
+En esta sección, lanzamos un segundo `JobInstance` para procesar el conjunto de datos de facturación de Febrero 2023,
+que se encuentra en el archivo `src/main/resources/billing-2023-02.csv`.
+
+- **Inicie el `BillingJob` y pase el archivo `billing-2023-02.csv` como `JobParameter`.**
+
+En la pestaña Terminal, ejecute el siguiente comando:
+
+````bash
+$ java -jar .\target\spring-batch-billing-job-0.0.1-SNAPSHOT.jar input.file=src/main/resources/billing-2023-02.csv
+````
+
+Deberíamos ver el siguiente mensaje en consola:
+
+````bash
+...
+2024-01-08T18:22:09.802-05:00  INFO 4616 --- [spring-batch-billing-job] [           main] o.s.b.c.l.support.SimpleJobLauncher      : Job: [dev.magadiflo.billingjob.app.jobs.BillingJob@252a8aae] launched with the following parameters: [{'input.file':'{value=src/main/resources/billing-2023-02.csv, type=class java.lang.String, identifying=true}'}]
+Procesando información de facturación desde el archivo src/main/resources/billing-2023-02.csv
+2024-01-08T18:22:09.833-05:00  INFO 4616 --- [spring-batch-billing-job] [           main] o.s.b.c.l.support.SimpleJobLauncher      : Job: [dev.magadiflo.billingjob.app.jobs.BillingJob@252a8aae] completed with the following parameters: [{'input.file':'{value=src/main/resources/billing-2023-02.csv, type=class java.lang.String, identifying=true}'}] and the following status: [COMPLETED]
+...
+````
+
+Esto significa que nuestro `BillingJob` ha procesado correctamente los datos de febrero de 2023 y ha generado el
+informe.
+
+Ahora revisemos la base de datos para inspeccionar los detalles del segundo `JobInstance`.
+
+- **Inspeccione los metadatos de Lote en la base de datos.**
+
+En la pestaña Terminal, ejecute el siguiente comando y observemos la salida que nos genera:
+
+````bash
+docker exec -it postgres /bin/sh
+/ # psql -U magadiflo -d db_spring_batch
+psql (15.2)
+Type "help" for help.
+
+db_spring_batch=# SELECT * FROM batch_job_instance;
+ job_instance_id | version |  job_name  |             job_key
+-----------------+---------+------------+----------------------------------
+               1 |       0 | BillingJob | c0cb4257f9f2b2fa119bbebfb801772f
+               2 |       0 | BillingJob | f70523e06481f0c914d3bdb634b86802
+(2 rows)
+
+db_spring_batch=#
+````
+
+Ahora tenemos una segundo `JobInstance` con `ID 2` para el mismo `BilingJob`. Observa cómo el `job_key` es diferente
+debido al diferente `JobParameter` de identificación.
+
+Ahora vamos a comprobar el `JobExecution` correspondiente para este segundo `JobInstance`. Para ello, utiliza el
+siguiente comando:
+
+````bash
+/ # psql -U magadiflo -d db_spring_batch
+psql (15.2)
+Type "help" for help.
+
+db_spring_batch=# SELECT * FROM batch_job_execution;
+ job_execution_id | version | job_instance_id |        create_time         | start_time | end_time |  status   | exit_code | exit_message |        last_updated
+------------------+---------+-----------------+----------------------------+------------+----------+-----------+-----------+--------------+----------------------------
+                1 |       1 |               1 | 2024-01-08 17:34:34.894126 |            |          | COMPLETED | COMPLETED |              | 2024-01-08 17:34:34.943337
+                2 |       1 |               2 | 2024-01-08 18:22:09.721848 |            |          | COMPLETED | COMPLETED |              | 2024-01-08 18:22:09.804924
+(2 rows)
+
+db_spring_batch=#
+````
+
+Como era de esperar, un segundo `JobExecution` para este segundo `JobInstance` está ahora presente en la tabla.
+
+Finalmente, comprobemos el contenido de `BATCH_JOB_EXECUTION_PARAMS` con el siguiente comando:
+
+````bash
+db_spring_batch=# SELECT * FROM batch_job_execution_params;
+ job_execution_id | parameter_name |  parameter_type  |            parameter_value             | identifying
+------------------+----------------+------------------+----------------------------------------+-------------
+                1 | input.file     | java.lang.String | src/main/resources/billing-2023-01.csv | Y
+                2 | input.file     | java.lang.String | src/main/resources/billing-2023-02.csv | Y
+(2 rows)
+
+db_spring_batch=#
+````
+
+Como puede ver, cada `execution` tiene su propio parámetro registrado en la tabla `BATCH_JOB_EXECUTION_PARAMS`.
+
 ### 4. Actualizando la prueba
 
 ---
