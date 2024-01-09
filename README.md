@@ -327,3 +327,54 @@ En esta lección, ha aprendido qué son las JobInstances y cómo identificarlas 
 esta lección, aprenderá a utilizar las API proporcionadas por Spring Batch para manipular JobParameters, y cómo iniciar
 el mismo o diferentes JobInstances.
 
+---
+
+## Testeando tu Job
+
+Ya hemos visto cómo testear los `jobs` de Spring Batch utilizando `JUnit 5` y las utilidades de prueba de Spring Boot en
+Laboratorios anteriores. En esta lección, `nos centraremos en las utilidades de prueba proporcionadas por Spring Batch`
+en el módulo `spring-batch-test`, que está diseñado para simplificar la prueba de artefactos por lotes.
+
+## Diferentes tipos de test para jobs por lotes
+
+Cuando se trata de probar jobs por lotes, existen varios niveles de pruebas:
+
+- **Probar el job de principio a fin:** En este escenario, una prueba debe proporcionar **los datos de entrada, ejecutar
+  el trabajo y verificar el resultado final**. Podemos calificar este tipo de pruebas como pruebas de `caja negra`, en
+  las que consideramos el trabajo como una caja negra que probamos en función de las entradas y salidas. Las pruebas de
+  extremo a extremo es lo que hemos estado haciendo hasta ahora en este curso.
+
+
+- **Probar cada paso del job individualmente:** En este escenario, un job por lotes complejo se define en un flujo
+  de trabajo de pasos, y **probamos cada paso de forma aislada sin lanzar el trabajo completo.**
+
+En ambos casos, es necesario configurar los datos de prueba y lanzar un job o un paso específico. Para ello, Spring
+Batch proporciona la API `JobLauncherTestUtils`, **diseñada para lanzar jobs completos o steps individuales en las
+pruebas.** `JobLauncherTestUtils` proporciona varias utilidades y métodos. Estos son los más importantes:
+
+- **Generación aleatoria de parámetros de job:** esta función le permite generar un conjunto único de parámetros de
+  job para tener instancias de job distintas durante las pruebas. Esto es particularmente útil para hacer sus
+  pruebas repetibles, y sus construcciones idempotentes. De hecho, esto evita reiniciar las mismas instancias de job
+  de nuevo a través de diferentes pruebas, lo que haría que algunas pruebas fallen. Estos métodos incluyen:
+
+    - `JobLauncherTestUtils.getUniqueJobParameters`
+    - `JobLauncherTestUtils.getUniqueJobParametersBuilder`
+
+
+- **Lanzar un job completo de principio a fin:** `JobLauncherTestUtils.launchJob` te permite lanzar un job de la misma
+  forma que lo lanzarías en producción. Tiene la opción de lanzarlo con un conjunto de parámetros de job generados
+  aleatoriamente, o con un conjunto específico de parámetros.
+
+
+- **Lanzamiento de un step individual:** `JobLauncherTestUtils.launchStep` le permite probar un paso aislado de otros
+  pasos sin tener que lanzar el job que lo incluye.
+
+Utilizaremos estas utilidades en el próximo Laboratorio de esta lección.
+
+## Decisiones de bases de datos
+
+## Compensaciones sobre el intercambio de bases de datos
+
+## Utilidades de testing de Spring Batch
+
+## Utilidades adicionales de test
