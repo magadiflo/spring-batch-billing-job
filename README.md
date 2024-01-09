@@ -387,8 +387,93 @@ producción.
 Por esta razón, vamos a demostrar la ejecución de pruebas contra una instancia de una base de datos de grado de
 producción: la muy popular base de datos PostgreSQL
 
-## Compensaciones sobre el intercambio de bases de datos
+## Intercambio de bases de datos
+
+Hemos decidido utilizar una base de datos `real` para realizar nuestras pruebas. Ahora nos enfrentamos a otra
+decisión: **¿cómo instalaremos y gestionaremos esta base de datos?**
+
+Una instancia de base de datos puede instalarse como un proceso independiente en la máquina de pruebas, o ejecutarse en
+un entorno de contenedores como Docker. Cuando se utiliza un entorno de contenedores, **las bibliotecas como
+`TestContainers` pueden ser útiles para crear contenedores de base de datos desechables para las pruebas.** Puedes
+aprender más sobre `TestContainers` utilizando los enlaces de recursos proporcionados en esta lección.
+
+Ahora, la pregunta es: **¿debería la misma instancia de base de datos (ya sea ejecutada como un proceso separado, o en
+un contenedor) ser compartida entre todas las pruebas o debería cada prueba tener su propia instancia de base de
+datos?**
+
+Hacer que cada prueba tenga su propia instancia de base de datos es técnicamente posible, pero tiene el inconveniente de
+ser costoso, tanto en tiempo de ejecución como en recursos. De hecho, tendremos que crear y destruir instancias reales
+de base de datos o contenedores para cada prueba, y ejecutar los scripts de inicialización de metadatos de Spring Batch,
+cada vez. Como alternativa, podríamos intentar una configuración extravagante (y propensa a errores) con transacciones
+de base de datos o rollbacks. Esto podría funcionar con unas pocas pruebas, pero en nuestra experiencia estas técnicas
+tienden a ser insoportablemente lentas si se escalan a cientos (o incluso miles) de pruebas, que es lo que suele ocurrir
+en los proyectos reales.
+
+Por las razones anteriores, hemos elegido la siguiente opción para este curso: **utilizar una instancia compartida del
+mismo producto de base de datos entre las pruebas. Pero, en este escenario, tendremos que asegurarnos de que los
+metadatos se borran entre pruebas, para evitar el temido error `"Una instancia de trabajo ya existe y está completa"`.**
 
 ## Utilidades de testing de Spring Batch
 
+Para ayudar con la limpieza de la base de datos durante las pruebas, Spring Batch proporciona `JobRepositoryTestUtils`
+que se puede utilizar para crear o eliminar `JobExecutions` según sea necesario durante las pruebas.
+
+**Un uso típico de `JobRepositoryTestUtils` es borrar los metadatos del lote de la base de datos antes o después de cada
+ejecución de prueba. Esto le permite tener un entorno limpio para cada caso de prueba sin comprometer el tiempo de
+ejecución del conjunto de pruebas, o el rendimiento.** Por ejemplo:
+
+````java
+
+@BeforeEach
+void setUp() {
+    this.jobRepositoryTestUtils.removeJobExecutions();
+}
+````
+
+o
+
+````java
+
+@AfterEach
+void tearDown() {
+    this.jobRepositoryTestUtils.removeJobExecutions();
+}
+````
+
+La opción que elija puede depender de cómo configure o desmonte sus pruebas.
+
 ## Utilidades adicionales de test
+
+Puede que necesite hacer algo más en sus pruebas que limpiar la base de datos. Por suerte, `JobLauncherTestUtils` y
+`JobRepositoryTestUtils` no son las únicas utilidades de test que `Spring Batch` proporciona en el módulo
+`spring-batch-test`.
+
+Otras utilidades incluyen, pero no se limitan a, los siguientes elementos:
+
+- **La clase ExecutionContextTestUtils:** esta clase proporciona métodos estáticos para acceder a atributos del contexto
+  de ejecución de `JobExecutions` y `StepExecutions`.
+- **La clase MetaDataInstanceFactory:** esta clase es útil para crear entidades de metadatos, como `JobInstance` y
+  `JobExecution`, con las restricciones definidas por el modelo de dominio de lotes, como el vínculo padre-hijo entre
+  `JobInstance` y `JobExecution`, o el vínculo padre-hijo entre `JobExecution` y `StepExecution`.
+- **La anotación @SpringBatchTest:** Esta anotación registra utilidades de prueba (como `JobLauncherTestUtils`,
+  `JobRepositoryTestUtils`, etc) como beans en el contexto de prueba para poder utilizarlas en las pruebas.
+
+## Vista previa: Utilidades de prueba de Spring Batch Scopes
+
+Además, puede que necesite una gestión detallada de sus artefactos Batch durante las pruebas. Spring Batch proporciona
+utilidades adicionales, como listeners de ejecución de pruebas como `JobScopeTestExecutionListener` y
+`StepScopeTestExecutionListener`. Estos listeners se utilizan para probar componentes (como lectores de item,
+escritores de item, etc.) que tienen ámbitos personalizados de Spring proporcionados por Spring Batch, que son
+`JobScope` y `StepScope`.
+
+Aún no hemos tratado el tema de los beans scoped en el curso, pero lo haremos en un módulo futuro. Por ahora, basta con
+que sepas que estos listeners de pruebas forman parte de las utilidades proporcionadas por Spring Batch en el módulo
+`spring-batch-test`, y que los utilizaremos en futuros laboratorios.
+
+## Resumen
+
+En esta lección, ha aprendido algunas de las ventajas y desventajas entre las distintas opciones de bases de datos de
+prueba y las utilidades de prueba proporcionadas por Spring Batch. En el próximo laboratorio, actualizaremos nuestra
+prueba actual de BillingJob para utilizar esas utilidades.
+
+---
