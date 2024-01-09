@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.batch.core.*;
-import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.test.JobLauncherTestUtils;
 import org.springframework.batch.test.JobRepositoryTestUtils;
 import org.springframework.batch.test.context.SpringBatchTest;
@@ -22,10 +21,6 @@ class SpringBatchBillingJobApplicationTests {
     private JobLauncherTestUtils jobLauncherTestUtils;
     @Autowired
     private JobRepositoryTestUtils jobRepositoryTestUtils;
-    @Autowired
-    private Job job;
-    @Autowired
-    private JobLauncher jobLauncher;
 
     @Test
     void testJobExecution(CapturedOutput output) throws Exception {
@@ -35,7 +30,7 @@ class SpringBatchBillingJobApplicationTests {
                 .toJobParameters();
 
         // when
-        JobExecution jobExecution = this.jobLauncher.run(this.job, jobParameters);
+        JobExecution jobExecution = this.jobLauncherTestUtils.launchJob(jobParameters);
 
         // then
         Assertions.assertTrue(output.getOut().contains("Procesando información de facturación desde el archivo /some/input/file"));

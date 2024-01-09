@@ -1328,3 +1328,69 @@ class SpringBatchBillingJobApplicationTests {
     /* other codes */
 }
 ````
+
+### Lanzar el Job bajo prueba
+
+Una de las características de `JobLauncherTestUtils` es que **detecta automáticamente el job bajo prueba en el contexto
+de la aplicación si es único.** Este es el caso de nuestro Laboratorio, solo tenemos un único job definido que es el
+`BillingJob`. **Por esta razón, podemos eliminar el autowired del job bajo prueba de la clase de prueba.**
+
+1. **Utilice la utilidad para lanzar el job**
+
+En lugar de hacer autowired del `Job` bajo prueba y del `JobLauncher` para probarlo, usamos el método
+`jobLauncherTestUtils.launchJob` que tiene el mismo efecto. En consecuencia, **eliminaremos** los siguientes autowired
+que usamos en lecciones anteriores:
+
+````java
+
+@Autowired
+private Job job;
+@Autowired
+private JobLauncher jobLauncher;
+````
+
+Una vez, habiendo eliminado las dos inyecciones anteriores, modificamos nuestra prueba para usar las utilidades
+proporcionadas por `@SpringBatchTest`.
+
+Finalmente, nuestra clase de test quedaría de la siguiente manera:
+
+````java
+
+@SpringBatchTest
+@SpringBootTest
+@ExtendWith(OutputCaptureExtension.class)
+class SpringBatchBillingJobApplicationTests {
+
+    @Autowired
+    private JobLauncherTestUtils jobLauncherTestUtils;
+    @Autowired
+    private JobRepositoryTestUtils jobRepositoryTestUtils;
+
+    @Test
+    void testJobExecution(CapturedOutput output) throws Exception {
+        // given
+        JobParameters jobParameters = new JobParametersBuilder()
+                .addString("input.file", "/some/input/file")
+                .toJobParameters();
+
+        // when
+        JobExecution jobExecution = this.jobLauncherTestUtils.launchJob(jobParameters);
+
+        // then
+        Assertions.assertTrue(output.getOut().contains("Procesando información de facturación desde el archivo /some/input/file"));
+        Assertions.assertEquals(ExitStatus.COMPLETED, jobExecution.getExitStatus());
+    }
+}
+````
+
+2. **Ejecute la prueba**
+
+**La prueba debería pasar**, lo que significa que tenemos el mismo resultado que antes, ¡pero con menos código!
+
+![tests success](./assets/10.test-success.png)
+
+Ahora, si ejecuta la prueba de nuevo, debería fallar con el error `"Job Instance already exists and is complete"`. Esto
+es de esperar, ya que utilizamos la misma base de datos compartida y ya tenemos una instancia de trabajo que se completó
+cuando ejecutamos la prueba por primera vez. Arreglémoslo borrando cualquier metadato de trabajo antes de cada prueba.
+
+![11.test-second-run.png](./assets/11.test-second-run.png)
