@@ -1289,7 +1289,7 @@ un `JobInstance`.
 En este Laboratorio, practicará el uso de la API de pruebas de Spring Batch para probar su `Job` en una variedad de
 escenarios.
 
-## Visión General
+### Visión General
 
 En la lección anterior, analizamos las distintas utilidades de prueba que proporciona Spring Batch para simplificar las
 pruebas de artefactos por lotes. En este Laboratorio, utilizaremos algunas de estas utilidades para mejorar nuestra
@@ -1300,3 +1300,31 @@ prueba.
 Por otra parte, **al igual que con los laboratorios anteriores, este laboratorio se inicializa con una instancia fresca
 de PostgreSQL que se ejecuta en un contenedor Docker que vamos a utilizar para las pruebas.**
 
+### Importar utilidades de test en las clases de prueba
+
+La anotación `@SpringBatchTest` registra las utilidades `JobLauncherTestUtils` y `JobRepositoryTestUtils` como beans de
+Spring en el contexto de prueba, por lo que podemos inyectarlas en la clase de prueba y utilizarlas cuando sea
+necesario.
+
+Así que sigamos adelante y añadamos la anotación y las utilidades a nuestra clase de prueba.
+
+1. Agregamos la anotación `@SpringBatchTest` en la clase de prueba.
+2. Inyectamos las utilidades de prueba `JobLauncherTestUtils` y `JobRepositoryTestUtils`.
+
+Con estas utilidades en su lugar, podemos utilizarlas en nuestra prueba BillingJob.
+
+````java
+
+@SpringBatchTest                                             //(1)
+@SpringBootTest
+@ExtendWith(OutputCaptureExtension.class)
+class SpringBatchBillingJobApplicationTests {
+
+    @Autowired
+    private JobLauncherTestUtils jobLauncherTestUtils;      // (2)
+    @Autowired
+    private JobRepositoryTestUtils jobRepositoryTestUtils;  // (2)
+
+    /* other codes */
+}
+````
