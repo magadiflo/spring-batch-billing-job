@@ -371,7 +371,21 @@ pruebas.** `JobLauncherTestUtils` proporciona varias utilidades y métodos. Esto
 
 Utilizaremos estas utilidades en el próximo Laboratorio de esta lección.
 
-## Decisiones de bases de datos
+## Decisiones sobre la base de datos
+
+Cuando se prueban jobs de Spring Batch, es importante decidir cómo gestionar los metadatos a través de las pruebas
+para evitar problemas de reiniciabilidad entre instancias de trabajo. Nadie quiere que sus pruebas fallen con el
+conocido error **"Una instancia de trabajo ya existe y está completa".**
+
+La opción más típica para mantener las pruebas idempotentes es utilizar una base de datos en memoria desechable para
+cada prueba, como H2, HSQL o Derby. Aunque utilizar una base de datos en memoria para las pruebas es una buena opción
+para evitar compartir metadatos, tiene la desventaja de ser a menudo diferente de la base de datos utilizada en
+producción. Esto puede suponer un riesgo inaceptable para los equipos que necesitan minimizar el número de diferencias
+entre las distintas partes de su sistema, incluidas las diferencias entre la infraestructura de pruebas y la de
+producción.
+
+Por esta razón, vamos a demostrar la ejecución de pruebas contra una instancia de una base de datos de grado de
+producción: la muy popular base de datos PostgreSQL
 
 ## Compensaciones sobre el intercambio de bases de datos
 
