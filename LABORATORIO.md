@@ -1283,3 +1283,20 @@ También aprendió sobre la relación entre `Job, JobInstance y JobExecution`, a
 un `JobInstance`.
 
 ---
+
+## Lab: Testing tu Job
+
+En este Laboratorio, practicará el uso de la API de pruebas de Spring Batch para probar su `Job` en una variedad de
+escenarios.
+
+## Visión General
+
+En la lección anterior, analizamos las distintas utilidades de prueba que proporciona Spring Batch para simplificar las
+pruebas de artefactos por lotes. En este Laboratorio, utilizaremos algunas de estas utilidades para mejorar nuestra
+prueba BillingJob. Dichas utilidades se proporcionan en el módulo `spring-batch-test`, que ya se ha importado como
+dependencia de prueba en el archivo `pom.xml`, por lo que estamos preparados para empezar a utilizarlas en nuestra
+prueba.
+
+Por otra parte, **al igual que con los laboratorios anteriores, este laboratorio se inicializa con una instancia fresca
+de PostgreSQL que se ejecuta en un contenedor Docker que vamos a utilizar para las pruebas.**
+
