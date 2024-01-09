@@ -885,7 +885,7 @@ public class BillingJob implements Job {
 ````
 
 - **Inicie el `BillingJob` y pase el archivo de entrada de datos de facturación como `JobParameter`.** Primero,
-  dejaremos limpia la base de datos, para eso ejecutamos nuestro script de shell:
+  dejaremos limpia la base de datos, para eso ejecutamos nuestro script de shell usando `Git Bash`:
 
 ````bash
 USUARIO@DESKTOP-EGDL8Q6 MINGW64 /m/PROGRAMACION/DESARROLLO_JAVA_SPRING/11.spring_academy/spring-batch-billing-job (feature/create-run-test-job)
@@ -1132,5 +1132,154 @@ db_spring_batch=#
 Como puede ver, cada `execution` tiene su propio parámetro registrado en la tabla `BATCH_JOB_EXECUTION_PARAMS`.
 
 ### 4. Actualizando la prueba
+
+En la sección anterior, has visto cómo pasar `JobParameters` declarativamente en la interfaz de línea de comandos con
+pares clave/valor como `input.file=src/main/resources/billing-2023-02.csv`. En esta sección, actualizaremos la prueba de
+nuestro `BillingJob` para mostrarle cómo pasar `JobParameters` de forma programática a través de las APIs proporcionadas
+por Spring Batch.
+
+Comparado con la versión anterior de nuestro `BillingJob`, en este Lab hemos actualizado la lógica de nuestro `Job` para
+extraer el fichero de entrada del conjunto `JobParameters` e imprimir un mensaje en la consola en consecuencia.
+Deberíamos actualizar la lógica del test en consecuencia.
+
+- **Actualice el `BillingJobApplicationTests` para probar la nueva lógica.**
+
+El `JobParametersBuilder` es la API principal que proporciona Spring Batch para construir un conjunto
+de `JobParameters`. En este test, utilizamos ese constructor para crear un parámetro de tipo String llamado `input.file`
+que tiene el valor `/some/input/file`.
+
+El valor del parámetro no importa realmente para el propósito de la prueba, todo lo que tenemos que verificar es que el
+`Job` está recibiendo el valor correcto del parámetro e imprimiendo el mensaje como se espera:
+
+````java
+
+@SpringBootTest
+@ExtendWith(OutputCaptureExtension.class)
+class SpringBatchBillingJobApplicationTests {
+
+    @Autowired
+    private Job job;
+
+    @Autowired
+    private JobLauncher jobLauncher;
+
+    @Test
+    void testJobExecution(CapturedOutput output) throws Exception {
+        // given
+        JobParameters jobParameters = new JobParametersBuilder()
+                .addString("input.file", "/some/input/file")
+                .toJobParameters();
+
+        // when
+        JobExecution jobExecution = this.jobLauncher.run(this.job, jobParameters);
+
+        // then
+        Assertions.assertTrue(output.getOut().contains("Procesando información de facturación desde el archivo /some/input/file"));
+        Assertions.assertEquals(ExitStatus.COMPLETED, jobExecution.getExitStatus());
+    }
+}
+````
+
+- **Ejecutando el test**
+
+Para ejecutar el test, abrimos la terminal, nos posicionamos en la raíz de nuestro proyecto (que es donde está generado
+el .jar del mismo) y ejecutamos el siguiente comando:
+
+````bash
+M:\PROGRAMACION\DESARROLLO_JAVA_SPRING\11.spring_academy\spring-batch-billing-job (feature/create-run-test-job)
+$ mvnw test
+````
+
+La prueba debería pasar, lo que significa que nuestro trabajo por lotes está haciendo lo que se supone que debe hacer.
+
+````bash
+2024-01-08T18:46:17.127-05:00  INFO 11288 --- [spring-batch-billing-job] [           main] o.s.b.c.l.support.SimpleJobLauncher      : Job: [dev.magadiflo.billingjob.app.jobs.BillingJob@682abca7] launched with the following parameters: [{'input.file':'{value=/some/input/file, type=class java.lang.String, identifying=true}'}]
+Procesando informaci├│n de facturaci├│n desde el archivo /some/input/file
+2024-01-08T18:46:17.141-05:00  INFO 11288 --- [spring-batch-billing-job] [           main] o.s.b.c.l.support.SimpleJobLauncher      : Job: [dev.magadiflo.billingjob.app.jobs.BillingJob@682abca7] completed with the following parameters: [{'input.file':'{value=/some/input/file, type=class java.lang.String, identifying=true}'}] and the following status: [COMPLETED]
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.680 s -- in dev.magadiflo.billingjob.app.SpringBatchBillingJobApplicationTests
+[INFO]
+[INFO] Results:
+[INFO]
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  12.257 s
+[INFO] Finished at: 2024-01-08T18:46:17-05:00
+[INFO] ------------------------------------------------------------------------
+````
+
+- **Momento de aprendizaje: Volviendo a ejecutar el test**
+
+Si ejecuta la prueba **por segunda vez**, fallará con un error similar al que vimos durante la lección al ejecutar de
+nuevo la misma `JobInstance` completada:
+
+````bash
+[ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 5.490 s <<< FAILURE! -- in dev.magadiflo.billingjob.app.SpringBatchBillingJobApplicationTests
+[ERROR] dev.magadiflo.billingjob.app.SpringBatchBillingJobApplicationTests.testJobExecution(CapturedOutput) -- Time elapsed: 1.510 s <<< ERROR!
+org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException: A job instance already exists and is complete for identifying parameters={'input.file':'{value=/some/input/file, type=class java.lang.String, identifying=true}'}.  If you want to run this job again, change the parameters.
+        at org.springframework.batch.core.repository.support.SimpleJobRepository.createJobExecution(SimpleJobRepository.java:158)
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+...
+[INFO]
+[INFO] Results:
+[INFO]
+[ERROR] Errors:
+[ERROR]   SpringBatchBillingJobApplicationTests.testJobExecution:31 ┬╗ JobInstanceAlreadyComplete A job instance already exists and is complete for identifying parameters={'input.file':'{value=/some/input/file, type=class java.lang.String, identifying=true}'}.  If you want to run this job again, change the parameters.
+[INFO]
+[ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0
+[INFO]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  10.264 s
+[INFO] Finished at: 2024-01-08T18:51:54-05:00
+[INFO] ------------------------------------------------------------------------
+...
+````
+
+Esto se debe a que la misma base de datos se utiliza para todas las pruebas. Si bien esto está previsto en producción,
+podría ser problemático en las pruebas, ya que las compilaciones del proyecto no serán idempotentes.
+
+Por esta razón, Spring Batch proporciona una clase de utilidad llamada `JobRepositoryTestUtils` que permite limpiar la
+base de datos antes o después de cada test. Esto es lo que discutiremos en la próxima lección.
+
+Por ahora tendrá que reiniciar la base de datos si se encuentra con este error. Usando `Git Bash` ejecutamos nuestro
+script de shell:
+
+````bash
+USUARIO@DESKTOP-EGDL8Q6 MINGW64 /m/PROGRAMACION/DESARROLLO_JAVA_SPRING/11.spring_academy/spring-batch-billing-job (feature/create-run-test-job)
+$ ./scripts/drop-create-tables-database.sh
+````
+
+- **Ir más allá con `JobParameters`**
+
+  Además de la posibilidad de proporcionar el nombre, tipo y valor de los `JobParameters`, la `API JobParametersBuilder`
+  también permite especificar si el parámetro es identificador o no a través del tercer parámetro booleano del método
+  `addString`. He aquí un ejemplo:
+
+````java
+ JobParameters jobParameters = new JobParametersBuilder()
+        .addString("input.file", "/some/input/file")
+        .addString("file.format", "csv", false)
+        .toJobParameters();
+````
+
+En este snippet, añadimos un segundo parámetro llamado `file.format` de tipo String con el valor `csv` **y que no se
+identifica (debido al tercer parámetro false del método).**
+
+Observe cómo no pasamos explícitamente `true` como tercer parámetro para `input.file`, ya que este es el valor por
+defecto para `JobParameters` en Spring Batch.
+
+Como ejercicio adicional, puedes intentar lanzar el BillingJob con una mezcla de JobParameters identificativos y no
+identificativos y ver como esto impacta o no en la definición e identificación de JobInstances.
+
+### Resumen
+
+Enhorabuena. En este Laboratorio, aprendió a utilizar `JobParameters` para crear distintos `JobInstances`.
+
+También aprendió sobre la relación entre `Job, JobInstance y JobExecution`, así como el ciclo de vida de
+un `JobInstance`.
 
 ---
