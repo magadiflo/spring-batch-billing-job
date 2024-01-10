@@ -1394,3 +1394,49 @@ es de esperar, ya que utilizamos la misma base de datos compartida y ya tenemos 
 cuando ejecutamos la prueba por primera vez. Arreglémoslo borrando cualquier metadato de trabajo antes de cada prueba.
 
 ![11.test-second-run.png](./assets/11.test-second-run.png)
+
+### Limpiar el entorno de pruebas antes de cada prueba
+
+Como acabamos de ver, nos encontramos con el error `"Job Instance already exists and is complete"` si ejecutamos
+nuestras pruebas más de una vez.
+
+Vamos a solucionarlo utilizando la clase `JobRepositoryTestUtils`.
+
+1. **Limpie los metadatos antes de ejecutar las pruebas**
+
+   Actualiza la clase de prueba y añade el siguiente método de inicialización `@BeforeEach`:
+
+````java
+
+@SpringBatchTest
+@SpringBootTest
+@ExtendWith(OutputCaptureExtension.class)
+class SpringBatchBillingJobApplicationTests {
+
+    @Autowired
+    private JobLauncherTestUtils jobLauncherTestUtils;
+    @Autowired
+    private JobRepositoryTestUtils jobRepositoryTestUtils;
+
+    @BeforeEach
+    void setUp() {
+        this.jobRepositoryTestUtils.removeJobExecutions();
+    }
+
+    @Test
+    void testJobExecution(CapturedOutput output) throws Exception {
+        /* code */
+    }
+}
+````
+
+El método que agregamos tiene la anotación `@BeforeEach`. Este método utiliza `JobRepositoryTestUtils` para **borrar
+todas las ejecuciones de `job` antes de que se ejecute cada prueba**, de forma que cada ejecución tendrá un esquema
+fresco y no se verá afectado por los metadatos de otras pruebas.
+
+2. **Vuelva a ejecutar la prueba varias veces**
+
+   Ahora, **si ejecuta la prueba varias veces, la prueba debería pasar con éxito** sin el error `"Job Instance already
+   exists and is complete"`. **¡Qué alivio!**
+
+A continuación, veamos un medio alternativo para permitir múltiples ejecuciones de nuestra prueba.

@@ -1,6 +1,7 @@
 package dev.magadiflo.billingjob.app;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.batch.core.*;
@@ -21,6 +22,11 @@ class SpringBatchBillingJobApplicationTests {
     private JobLauncherTestUtils jobLauncherTestUtils;
     @Autowired
     private JobRepositoryTestUtils jobRepositoryTestUtils;
+
+    @BeforeEach
+    void setUp() {
+        this.jobRepositoryTestUtils.removeJobExecutions();
+    }
 
     @Test
     void testJobExecution(CapturedOutput output) throws Exception {
