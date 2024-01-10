@@ -1440,3 +1440,126 @@ fresco y no se verá afectado por los metadatos de otras pruebas.
    exists and is complete"`. **¡Qué alivio!**
 
 A continuación, veamos un medio alternativo para permitir múltiples ejecuciones de nuestra prueba.
+
+### Usando Job Parameters únicos
+
+`JobLauncherTestUtils` proporciona métodos de ayuda que crean parámetros de job aleatorios para ayudarnos a evitar el
+temido error `"Job Instance already exists and is complete"`.
+
+Exploremos ahora esta utilidad.
+
+1. **Utilice Job Parameters únicos**
+
+Actualizar nuestro método de prueba y cambiar la forma en que construimos `JobParameters`.
+
+````java
+
+@SpringBatchTest
+@SpringBootTest
+@ExtendWith(OutputCaptureExtension.class)
+class SpringBatchBillingJobApplicationTests {
+
+    /* other codes */
+    @Test
+    void testJobExecution(CapturedOutput output) throws Exception {
+        // given
+        JobParameters jobParameters = this.jobLauncherTestUtils.getUniqueJobParametersBuilder()
+                .addString("input.file", "/some/input/file")
+                .toJobParameters();
+        /* other codes */
+    }
+}
+````
+
+Tenga en cuenta que solo hemos cambiado el `new JobParametersBuilder()` por el
+`this.jobLauncherTestUtils.getUniqueJobParametersBuilder()`
+
+2. **Ejecute el test**
+
+   Cuando ejecute la prueba verá que pasa igual que en el último paso de Lab.
+
+   Pero, **¿qué pasaría si no limpiáramos los metadatos de la base de datos?**
+
+
+3. **Comentemos el `this.jobRepositoryTestUtils.removeJobExecutions()` del método con anotación @BeforeEach**
+
+
+4. **Volvamos a ejecutar el test**
+
+   De hecho, vuelva a ejecutar la prueba varias veces: 2 veces, 10 veces... tantas veces como quiera. La prueba sigue
+   pasando y no falla con "Job Instance already exists and is complete".
+
+   **¿Pero cómo es posible?**
+
+   Echemos un vistazo a los metadatos para averiguarlo.
+
+
+5. **Inspeccionemos la base de datos**
+
+   Hemos visto en laboratorios anteriores que los `jobs` guardan metadatos en la base de datos.<br><br>
+   Veamos algunos de esos metadatos ahora que estamos utilizando `jobLauncherTestUtils.getUniqueJobParametersBuilder()`
+   pero no `jobRepositoryTestUtils.removeJobExecutions()`;<br><br>
+   Ejecuta la siguiente consulta en el terminal:
+
+   ````bash
+   docker container exec -it postgres /bin/sh
+   / # psql -U magadiflo -d db_spring_batch
+   psql (15.2)
+   Type "help" for help.
+   
+   db_spring_batch=# SELECT * FROM batch_job_execution_params;
+    job_execution_id | parameter_name |  parameter_type  |   parameter_value   | identifying
+   ------------------+----------------+------------------+---------------------+-------------
+                   2 | random         | java.lang.Long   | 8827827676537872349 | Y
+                   2 | input.file     | java.lang.String | /some/input/file    | Y
+                   4 | random         | java.lang.Long   | 2941173237518358423 | Y
+                   4 | input.file     | java.lang.String | /some/input/file    | Y
+                   6 | random         | java.lang.Long   | 5846616915654595076 | Y
+                   6 | input.file     | java.lang.String | /some/input/file    | Y
+                   8 | random         | java.lang.Long   | 2743817225545271128 | Y
+                   8 | input.file     | java.lang.String | /some/input/file    | Y
+   (8 rows)
+   
+   db_spring_batch=#
+   ````
+
+   ¡Mira todos esos metadatos!<br><br>
+   Fíjate en la inclusión automática del parámetro aleatorio, que mantiene nuestras JobExecutions únicas.<br><br>
+   Está claro que cada vez se añadirán más metadatos a la base de datos con el tiempo. **¿Deberíamos dejar estos
+   metadatos en la base de datos ya que no parecen afectar a nuestras ejecuciones de prueba? ¿Es esta una situación de "
+   a quién le importa"?**<br><br>
+
+### Momento de aprendizaje: Contaminación de pruebas
+
+Sí, deberíamos restablecer jobRepositoryTestUtils.removeJobExecutions() y limpiar la base de datos antes de cada
+ejecución de prueba. ¿Pero por qué importa si las pruebas pasan de todos modos?
+
+Aunque estas pruebas pasen sin limpiar la base de datos, hemos introducido contaminación de pruebas en la ecuación. ¿Qué
+es la contaminación de pruebas y por qué es un problema?
+
+La contaminación de pruebas se produce cuando las pruebas dejan artefactos que pueden afectar a otras pruebas o a
+pruebas futuras. Al omitir removeJobExecutions(), las pruebas pueden necesitar tener en cuenta los metadatos dejados por
+otras pruebas. Imagina cientos o incluso miles de pruebas que tienen que tener en cuenta de alguna manera los artefactos
+dejados por otras pruebas.
+
+Nuestra prueba actual pasa incluso con la contaminación de la prueba presente, pero otras pruebas que podrían escribirse
+en el futuro podrían no tener tanta suerte. Quizás necesitemos contar las ejecuciones de la prueba, o verificar la
+salida exacta de metadatos, o cualquier otro escenario que requiera un control preciso sobre la salida de nuestra
+prueba.
+
+Por estas y muchas otras razones, **la limpieza de cualquier artefacto de prueba antes o después de una ejecución de
+prueba es una buena práctica.**
+
+6. **Descomentemos la línea `this.jobRepositoryTestUtils.removeJobExecutions()`**<br><br>
+7. **Volvamos a ejecutar las pruebas e inspecciones la base de datos**<br><br>
+   Vuelva a ejecutar las pruebas varias veces y observe que la base de datos sólo contiene los datos de la prueba
+   anterior:
+
+   ````bash
+   db_spring_batch=# SELECT * FROM batch_job_execution_params;
+    job_execution_id | parameter_name |  parameter_type  |   parameter_value    | identifying
+   ------------------+----------------+------------------+----------------------+-------------
+                  14 | random         | java.lang.Long   | -6843745447331434632 | Y
+                  14 | input.file     | java.lang.String | /some/input/file     | Y
+   (2 rows)
+   ````

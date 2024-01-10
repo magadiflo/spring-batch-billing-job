@@ -31,7 +31,7 @@ class SpringBatchBillingJobApplicationTests {
     @Test
     void testJobExecution(CapturedOutput output) throws Exception {
         // given
-        JobParameters jobParameters = new JobParametersBuilder()
+        JobParameters jobParameters = this.jobLauncherTestUtils.getUniqueJobParametersBuilder()
                 .addString("input.file", "/some/input/file")
                 .toJobParameters();
 
