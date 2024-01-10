@@ -4,7 +4,9 @@ Curso dictado por la misma página de Spring `Spring Academy`
 
 ---
 
-# INTRODUCCIÓN
+# TEORÍA
+
+---
 
 ## Introducción al procesamiento por lotes
 
@@ -116,3 +118,362 @@ Como desarrollador de Spring Batch, normalmente utilizará las APIs proporcionad
 módulos `Batch Infrastructure` y `Batch Core` para definir sus `jobs` y `steps` en la capa Application. Spring Batch
 proporciona una amplia biblioteca de componentes de lotes que puede utilizar de forma inmediata (como lectores de
 elementos, escritores de elementos, particionadores de datos, etc.).
+
+---
+
+# MODULE 1: Create, run and test your Job
+
+---
+
+## Entendiendo los Jobs y cómo ejecutarlos
+
+En la lección anterior, aprendió que un `job` es una entidad que encapsula un proceso por lotes completo que se ejecuta
+de principio a fin sin interacción ni interrupción. En esta lección, aprenderá cómo se representan internamente
+los `jobs` en Spring Batch, cómo se lanzan y cómo se conservan sus metadatos de ejecución.
+
+## ¿Qué es un Job?
+
+Un `job` es una entidad que encapsula todo un proceso por lotes que se ejecuta de principio a fin. Consiste en un
+conjunto de pasos que se ejecutan en un orden específico. Cubriremos los pasos en una lección futura. Aquí nos
+centraremos en qué es un `job` y cómo se representa en Spring Batch.
+
+Un `job` por lotes en Spring Batch está representado por la interfaz `Job` proporcionada por la dependencia
+`spring-batch-core`:
+
+````java
+public interface Job {
+    String getName();
+
+    void execute(JobExecution execution);
+}
+````
+
+En un nivel fundamental, la interfaz `Job` requiere que las implementaciones especifiquen el nombre del Job (el método
+`getName()`) y lo que se supone que debe hacer el Job (el método `execute(JobExecution execution)`).
+
+El método `execute` da una referencia a un objeto `JobExecution`. El objeto `JobExecution` **representa la ejecución
+real del `Job` en tiempo de ejecución. Contiene una serie de detalles en tiempo de ejecución, como la hora de inicio,
+la hora de finalización, el estado de ejecución, etc.** Esta información de tiempo de ejecución es almacenada por Spring
+Batch en un repositorio de metadatos, que veremos en la siguiente sección.
+
+Observe que no se espera que el método `execute` lance ninguna excepción. Las excepciones en tiempo de ejecución
+deben ser gestionadas por las implementaciones, y añadidas en el objeto `JobExecution`. Los clientes deben inspeccionar
+el estado de `JobExecution` para determinar el éxito o el fracaso.
+
+## Entendiendo los metadatos del Job
+
+Uno de los conceptos clave en Spring Batch es el `JobRepository`. El `JobRepository` es donde se almacenan todos los
+metadatos sobre `jobs` y `steps`. Un `JobRepository` puede ser un almacén persistente o un almacén en memoria. Un
+almacén persistente tiene la ventaja de proporcionar metadatos incluso después de que un `job` haya terminado, lo que
+podría ser utilizado para el análisis posterior o para reiniciar un `job` en el caso de un fallo. Cubriremos la
+posibilidad de reiniciar un `Job` en una lección posterior.
+
+Spring Batch proporciona una implementación `JDBC` del `JobRepository`, que almacena metadatos de lotes en una base de
+datos relacional. En un sistema de producción, deberá crear algunas tablas que Spring Batch utilizará para almacenar sus
+metadatos de ejecución. Ya hemos tratado las tablas de metadatos en el Laboratorio anterior.
+
+El `JobRepository` es lo que crea un objeto `JobExecution` cuando se lanza un trabajo por primera vez. Pero, **¿cómo se
+lanzan los Trabajos?** Veámoslo en la siguiente sección.
+
+## Lanzando Jobs
+
+El lanzamiento de `jobs` en Spring Batch se realiza a través del concepto `JobLauncher`, representado por la siguiente
+interfaz:
+
+````java
+public interface JobLauncher {
+    JobExecution run(Job job, JobParameters jobParameters) throws
+            JobExecutionAlreadyRunningException,
+            JobRestartException,
+            JobInstanceAlreadyCompleteException,
+            JobParametersInvalidException;
+}
+````
+
+El método `run` está diseñado para lanzar un `Job` dado con un conjunto de JobParameters. Cubriremos los parámetros del
+`job` en detalle en una lección posterior. Por ahora, puedes pensar en ellos como una colección de pares clave/valor
+que son pasados al `Job` en tiempo de ejecución. Hay dos aspectos importantes a entender aquí:
+
+- Se espera que las implementaciones de la interfaz `JobLauncher` obtengan un `JobExecution` válido del `JobRepository`
+  y ejecuten el `Job`.
+- El método `run` lanza diferentes tipos de excepciones. Cubriremos todas estas excepciones en detalle durante el curso.
+
+Casi nunca tendrá que implementar la interfaz `JobLauncher` usted mismo, porque Spring Batch proporciona una
+implementación lista para usar. El siguiente diagrama muestra cómo el `JobLauncher`, el `JobRepository` y el `Job`
+interactúan entre sí.
+
+![05.job-launcher-repository.svg](./assets/05.job-launcher-repository.svg)
+
+Los trabajos por lotes se lanzan normalmente de dos maneras:
+
+- Desde la interfaz de línea de comandos.
+- Desde un contenedor web.
+
+**En este curso, sólo cubriremos el lanzamiento de `Jobs` desde la línea de comandos.** Por favor, consulte los
+enlaces de recursos adicionales para más detalles sobre cómo lanzar trabajos desde dentro de un contenedor web.
+
+---
+
+## Entendiendo las instancias de Job
+
+En la lección anterior, aprendiste sobre `Jobs` y `JobExecutions`. En esta lección, exploraremos otro concepto clave del
+modelo de dominio Batch, que es `JobInstance`. Explicaremos qué son las `JobInstances` y cómo se relacionan con
+los `Jobs` y las `JobExecutions`.
+
+## ¿Qué son los Job Instances?
+
+Un `job` puede definirse una vez, pero es probable que se ejecute muchas veces, normalmente según un calendario
+establecido. En Spring Batch, un `job` es la definición genérica de un proceso por lotes especificado por un
+desarrollador. Esta definición genérica debe parametrizarse para crear instancias reales de un `job`, denominadas
+`JobInstances`.
+
+**Un `JobInstance` es una parametrización única de una definición de Job.** Por ejemplo, imagine un proceso por lotes
+que
+necesita ser ejecutado una vez al final de cada día, o cuando un determinado archivo está presente. En el escenario de
+una vez al día, podemos utilizar Spring Batch para crear un `Job` EndOfDay para ello. Habría una única definición de
+`Job` EndOfDay, pero múltiples instancias de ese mismo `Job`, una por día. Cada instancia procesaría los datos de un
+día en particular, y podría tener un resultado diferente (éxito o fracaso) de otras instancias. Por lo tanto, cada
+instancia individual del `Job` debe ser rastreada por separado.
+
+Un `JobInstance` se distingue de otros `JobInstances` por un parámetro específico, o un conjunto de parámetros. Por
+ejemplo, un parámetro llamado **schedule.date** especificaría un día concreto. Dicho parámetro se
+denomina `JobParameter`. Los `JobParameters` son los que distinguen un `JobInstance` de otra. El siguiente diagrama
+muestra cómo los `JobParameters` definen las `JobInstances`:
+
+![job parameters](./assets/07.job-parameters.svg)
+
+## ¿Qué representan los Job Instances y los Job Parameters?
+
+Los `JobInstances` se diferencian entre sí por distintos `JobParameters`. Estos parámetros suelen representar los datos
+que
+debe procesar un determinado `JobInstance`. Por ejemplo, en el caso del `Job` EndOfDay, el `Job parameter`
+**schedule.date** para el 1 de enero define la instancia de job que procesará los datos del 1 de enero.
+El `Job parameter` **schedule.date** para el 2 de enero define la instancia de job que procesará los datos del 2 de
+enero, y así sucesivamente.
+
+Aunque no es necesario que los `job parameters` representen los datos que se van a procesar, esta es una buena
+sugerencia - y una buena práctica - para diseñar correctamente los `JobInstances`. Diseñar `JobInstances` que
+representen los datos a procesar es más fácil de configurar, de probar y de pensar, en caso de fallo.
+
+La definición de un `JobInstance` en sí no tiene absolutamente ninguna relación con los datos que se van a cargar.
+Depende totalmente de la implementación del `Job` determinar cómo se cargan los datos, basándose en
+los `Job parameters`. A continuación se muestran algunos ejemplos de `JobParameters` y cómo representan los datos que
+debe procesar el `JobInstance` correspondiente:
+
+- **Una fecha específica:** En este caso, tendríamos una JobInstance por fecha.
+- **Un fichero concreto:** En este caso, tendríamos una JobInstance por fichero.
+- **Un rango específico de registros en una tabla de base de datos relacional:** En este caso, tendríamos una
+  JobInstance por rango.
+- Y más.
+
+Para nuestro curso, el `BillingJob` de Spring Cellular consume un archivo plano como entrada, que es un buen candidato
+para ser pasado como un JobParameter a nuestro Job.
+
+Esto es lo que veremos en el próximo laboratorio de esta lección.
+
+## ¿Cómo se relacionan los Job Instance con los Job Execution?
+
+**Un `JobExecution` se refiere al concepto técnico de un único intento de ejecutar un** `JobInstance`. Como se ha visto
+en la lección anterior, un `JobExecution` puede terminar con éxito o con fracaso. En el caso del `Job` **EndOfDay**, si
+la ejecución del 1 de Enero falla la primera vez y se ejecuta de nuevo al día siguiente, sigue siendo la ejecución del 1
+de Enero. Por lo tanto, cada `JobInstance` puede tener múltiples `JobExecutions`.
+
+La relación entre los conceptos de `Job, JobInstance, JobParameters y JobExecution` se resume en el siguiente diagrama:
+
+![job class relations](./assets/08.job-class-relations.svg)
+
+He aquí un ejemplo concreto del ciclo de vida de un `JobInstance` en el caso del `Job EndOfDay`:
+
+![lifecycle example](./assets/09.lifecycle-example.svg)
+
+En este ejemplo, el primer intento de ejecución del `Job Instance 1` falla, por lo que se ejecuta otra ejecución
+y tiene éxito. Esto da lugar a dos `JobExecutions` para la misma `JobInstance`. Para el `Job Instance 2`, sin
+embargo, el primer intento de ejecución tiene éxito, por lo que no hay necesidad de lanzar una segunda ejecución.
+
+**En Spring Batch, un `JobInstance` no se considera completo a menos que un `JobExecution` finalice con éxito.** Un
+`JobInstance` que está completo no puede reiniciarse de nuevo. Se trata de una elección de diseño para evitar el
+reprocesamiento accidental de los mismos datos para los `jobs` por lotes que no son idempotentes.
+
+## Los distintos tipos de Job Parameters
+
+Los `JobParameters` se utilizan normalmente para distinguir un `JobInstance` de otro. En otras palabras, se utilizan
+para identificar un `JobInstance` específico.
+
+No todos los parámetros pueden utilizarse para identificar `job instance`. Por ejemplo, si el `Job EndOfDay`
+toma otro parámetro - digamos, **file.format**) - que representa el formato del archivo de salida (CSV, XML, y otros),
+este parámetro no representa realmente los datos a procesar, por lo que, podría ser excluido del proceso de
+identificación de los `Job Instances`.
+
+Aquí es donde entran en juego los `JobParameters` **no identificadores**. En Spring Batch, los `JobParameters` pueden
+ser identificadores o no identificadores. Un `JobParameter` identificativo contribuye a la identificación
+de `JobInstance`, mientras que uno no identificativo no. Por defecto, los `JobParameters` son identificadores, y Spring
+Batch proporciona API para especificar si un `JobParameter` es identificador o no.
+
+En el ejemplo del `Job EndOfDay`, los parámetros se pueden definir en la siguiente tabla:
+
+| Job parameters | Identifying? | Example    
+|----------------|--------------|------------
+| schedule.date  | yes          | 2023-01-01 
+| file.format    | no           | csv        
+
+Ahora la pregunta es: **¿Por qué es importante y cómo se utiliza en Spring Batch?** La identificación de `JobParameters`
+juega un papel crucial en caso de fallo. En un entorno de producción, donde cientos de instancias de Job se están
+ejecutando, y una de ellas falla, necesitamos una manera de identificar qué instancia ha fallado. Aquí es donde la
+identificación de los parámetros del `Job` es clave. Cuando un `JobExecution` para un `JobInstance` dado falla, lanzar
+el mismo job con el mismo conjunto de `JobParameters` de identificación creará un nuevo `JobExecution` (es decir, un
+nuevo intento) para el mismo JobInstance.
+
+En esta lección, ha aprendido qué son las JobInstances y cómo identificarlas con JobParameters. En el Laboratorio de
+esta lección, aprenderá a utilizar las API proporcionadas por Spring Batch para manipular JobParameters, y cómo iniciar
+el mismo o diferentes JobInstances.
+
+---
+
+## Testeando tu Job
+
+Ya hemos visto cómo testear los `jobs` de Spring Batch utilizando `JUnit 5` y las utilidades de prueba de Spring Boot en
+Laboratorios anteriores. En esta lección, `nos centraremos en las utilidades de prueba proporcionadas por Spring Batch`
+en el módulo `spring-batch-test`, que está diseñado para simplificar la prueba de artefactos por lotes.
+
+## Diferentes tipos de test para jobs por lotes
+
+Cuando se trata de probar jobs por lotes, existen varios niveles de pruebas:
+
+- **Probar el job de principio a fin:** En este escenario, una prueba debe proporcionar **los datos de entrada, ejecutar
+  el trabajo y verificar el resultado final**. Podemos calificar este tipo de pruebas como pruebas de `caja negra`, en
+  las que consideramos el trabajo como una caja negra que probamos en función de las entradas y salidas. Las pruebas de
+  extremo a extremo es lo que hemos estado haciendo hasta ahora en este curso.
+
+
+- **Probar cada paso del job individualmente:** En este escenario, un job por lotes complejo se define en un flujo
+  de trabajo de pasos, y **probamos cada paso de forma aislada sin lanzar el trabajo completo.**
+
+En ambos casos, es necesario configurar los datos de prueba y lanzar un job o un paso específico. Para ello, Spring
+Batch proporciona la API `JobLauncherTestUtils`, **diseñada para lanzar jobs completos o steps individuales en las
+pruebas.** `JobLauncherTestUtils` proporciona varias utilidades y métodos. Estos son los más importantes:
+
+- **Generación aleatoria de parámetros de job:** esta función le permite generar un conjunto único de parámetros de
+  job para tener instancias de job distintas durante las pruebas. Esto es particularmente útil para hacer sus
+  pruebas repetibles, y sus construcciones idempotentes. De hecho, esto evita reiniciar las mismas instancias de job
+  de nuevo a través de diferentes pruebas, lo que haría que algunas pruebas fallen. Estos métodos incluyen:
+
+    - `JobLauncherTestUtils.getUniqueJobParameters`
+    - `JobLauncherTestUtils.getUniqueJobParametersBuilder`
+
+
+- **Lanzar un job completo de principio a fin:** `JobLauncherTestUtils.launchJob` te permite lanzar un job de la misma
+  forma que lo lanzarías en producción. Tiene la opción de lanzarlo con un conjunto de parámetros de job generados
+  aleatoriamente, o con un conjunto específico de parámetros.
+
+
+- **Lanzamiento de un step individual:** `JobLauncherTestUtils.launchStep` le permite probar un paso aislado de otros
+  pasos sin tener que lanzar el job que lo incluye.
+
+Utilizaremos estas utilidades en el próximo Laboratorio de esta lección.
+
+## Decisiones sobre la base de datos
+
+Cuando se prueban jobs de Spring Batch, es importante decidir cómo gestionar los metadatos a través de las pruebas
+para evitar problemas de reiniciabilidad entre instancias de trabajo. Nadie quiere que sus pruebas fallen con el
+conocido error **"Una instancia de trabajo ya existe y está completa".**
+
+La opción más típica para mantener las pruebas idempotentes es utilizar una base de datos en memoria desechable para
+cada prueba, como H2, HSQL o Derby. Aunque utilizar una base de datos en memoria para las pruebas es una buena opción
+para evitar compartir metadatos, tiene la desventaja de ser a menudo diferente de la base de datos utilizada en
+producción. Esto puede suponer un riesgo inaceptable para los equipos que necesitan minimizar el número de diferencias
+entre las distintas partes de su sistema, incluidas las diferencias entre la infraestructura de pruebas y la de
+producción.
+
+Por esta razón, vamos a demostrar la ejecución de pruebas contra una instancia de una base de datos de grado de
+producción: la muy popular base de datos PostgreSQL
+
+## Intercambio de bases de datos
+
+Hemos decidido utilizar una base de datos `real` para realizar nuestras pruebas. Ahora nos enfrentamos a otra
+decisión: **¿cómo instalaremos y gestionaremos esta base de datos?**
+
+Una instancia de base de datos puede instalarse como un proceso independiente en la máquina de pruebas, o ejecutarse en
+un entorno de contenedores como Docker. Cuando se utiliza un entorno de contenedores, **las bibliotecas como
+`TestContainers` pueden ser útiles para crear contenedores de base de datos desechables para las pruebas.** Puedes
+aprender más sobre `TestContainers` utilizando los enlaces de recursos proporcionados en esta lección.
+
+Ahora, la pregunta es: **¿debería la misma instancia de base de datos (ya sea ejecutada como un proceso separado, o en
+un contenedor) ser compartida entre todas las pruebas o debería cada prueba tener su propia instancia de base de
+datos?**
+
+Hacer que cada prueba tenga su propia instancia de base de datos es técnicamente posible, pero tiene el inconveniente de
+ser costoso, tanto en tiempo de ejecución como en recursos. De hecho, tendremos que crear y destruir instancias reales
+de base de datos o contenedores para cada prueba, y ejecutar los scripts de inicialización de metadatos de Spring Batch,
+cada vez. Como alternativa, podríamos intentar una configuración extravagante (y propensa a errores) con transacciones
+de base de datos o rollbacks. Esto podría funcionar con unas pocas pruebas, pero en nuestra experiencia estas técnicas
+tienden a ser insoportablemente lentas si se escalan a cientos (o incluso miles) de pruebas, que es lo que suele ocurrir
+en los proyectos reales.
+
+Por las razones anteriores, hemos elegido la siguiente opción para este curso: **utilizar una instancia compartida del
+mismo producto de base de datos entre las pruebas. Pero, en este escenario, tendremos que asegurarnos de que los
+metadatos se borran entre pruebas, para evitar el temido error `"Una instancia de trabajo ya existe y está completa"`.**
+
+## Utilidades de testing de Spring Batch
+
+Para ayudar con la limpieza de la base de datos durante las pruebas, Spring Batch proporciona `JobRepositoryTestUtils`
+que se puede utilizar para crear o eliminar `JobExecutions` según sea necesario durante las pruebas.
+
+**Un uso típico de `JobRepositoryTestUtils` es borrar los metadatos del lote de la base de datos antes o después de cada
+ejecución de prueba. Esto le permite tener un entorno limpio para cada caso de prueba sin comprometer el tiempo de
+ejecución del conjunto de pruebas, o el rendimiento.** Por ejemplo:
+
+````java
+
+@BeforeEach
+void setUp() {
+    this.jobRepositoryTestUtils.removeJobExecutions();
+}
+````
+
+o
+
+````java
+
+@AfterEach
+void tearDown() {
+    this.jobRepositoryTestUtils.removeJobExecutions();
+}
+````
+
+La opción que elija puede depender de cómo configure o desmonte sus pruebas.
+
+## Utilidades adicionales de test
+
+Puede que necesite hacer algo más en sus pruebas que limpiar la base de datos. Por suerte, `JobLauncherTestUtils` y
+`JobRepositoryTestUtils` no son las únicas utilidades de test que `Spring Batch` proporciona en el módulo
+`spring-batch-test`.
+
+Otras utilidades incluyen, pero no se limitan a, los siguientes elementos:
+
+- **La clase ExecutionContextTestUtils:** esta clase proporciona métodos estáticos para acceder a atributos del contexto
+  de ejecución de `JobExecutions` y `StepExecutions`.
+- **La clase MetaDataInstanceFactory:** esta clase es útil para crear entidades de metadatos, como `JobInstance` y
+  `JobExecution`, con las restricciones definidas por el modelo de dominio de lotes, como el vínculo padre-hijo entre
+  `JobInstance` y `JobExecution`, o el vínculo padre-hijo entre `JobExecution` y `StepExecution`.
+- **La anotación @SpringBatchTest:** Esta anotación registra utilidades de prueba (como `JobLauncherTestUtils`,
+  `JobRepositoryTestUtils`, etc) como beans en el contexto de prueba para poder utilizarlas en las pruebas.
+
+## Vista previa: Utilidades de prueba de Spring Batch Scopes
+
+Además, puede que necesite una gestión detallada de sus artefactos Batch durante las pruebas. Spring Batch proporciona
+utilidades adicionales, como listeners de ejecución de pruebas como `JobScopeTestExecutionListener` y
+`StepScopeTestExecutionListener`. Estos listeners se utilizan para probar componentes (como lectores de item,
+escritores de item, etc.) que tienen ámbitos personalizados de Spring proporcionados por Spring Batch, que son
+`JobScope` y `StepScope`.
+
+Aún no hemos tratado el tema de los beans scoped en el curso, pero lo haremos en un módulo futuro. Por ahora, basta con
+que sepas que estos listeners de pruebas forman parte de las utilidades proporcionadas por Spring Batch en el módulo
+`spring-batch-test`, y que los utilizaremos en futuros laboratorios.
+
+## Resumen
+
+En esta lección, ha aprendido algunas de las ventajas y desventajas entre las distintas opciones de bases de datos de
+prueba y las utilidades de prueba proporcionadas por Spring Batch. En el próximo laboratorio, actualizaremos nuestra
+prueba actual de BillingJob para utilizar esas utilidades.
+
+---
